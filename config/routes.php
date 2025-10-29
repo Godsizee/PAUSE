@@ -146,6 +146,6 @@ return [
     '#^api/community/my-posts$#' => [CommunityController::class, 'getMyPostsApi'], // GET (NEU: Schüler holt seine Posts)
     '#^api/community/post/update$#' => [CommunityController::class, 'updatePostApi'], // POST (NEU: Schüler/Admin bearbeitet Post)
     '#^api/community/post/delete$#' => [CommunityController::class, 'deletePostApi'], // POST (NEU: Schüler/Admin löscht eigenen/beliebigen Post)
-
+'#^api/student/events$#' => [AcademicEventController::class, 'getForStudent'],
 ];
 
