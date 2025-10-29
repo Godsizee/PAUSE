@@ -1,0 +1,12 @@
+# Verhindert die direkte Ausführung von PHP und anderen Skripten
+<FilesMatch "\.(php|php.|phtml|pl|py|jsp|asp|aspx|sh|cgi)$">
+    Order Deny,Allow
+    Deny from all
+</FilesMatch>
+
+# Optional: Erzwingt das Herunterladen von Dateien, anstatt sie im Browser anzuzeigen
+<IfModule mod_headers.c>
+    <Files *.*>
+        Header set Content-Disposition attachment
+    </Files>
+</IfModule>

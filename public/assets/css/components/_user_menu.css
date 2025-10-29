@@ -1,0 +1,138 @@
+/* public/assets/css/components/_user_menu.css */
+
+/* User Menu Styles (Primarily for Desktop) */
+
+.user-menu {
+    position: relative; /* Needed for absolute positioning of dropdown */
+}
+
+.user-menu-toggle {
+    display: none; /* Hidden by default, shown on desktop */
+    align-items: center;
+    gap: 8px;
+    background: none;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    color: #fff;
+    font-weight: 600;
+    padding: 5px; /* Add some padding for easier clicking */
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+}
+.user-menu-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+}
+
+.user-menu-toggle span {
+    white-space: nowrap; /* Prevent username from wrapping */
+}
+
+.user-menu-toggle .chevron-down {
+    transition: transform 0.2s ease-in-out;
+    stroke: #fff; /* White chevron */
+}
+
+.user-menu-toggle[aria-expanded="true"] .chevron-down {
+    transform: rotate(180deg);
+}
+
+.user-menu-dropdown {
+    display: none; /* Hidden by default */
+    position: absolute;
+    flex-direction: column;
+    align-items: stretch; /* Links take full width */
+    gap: 0; /* No gap needed, padding on links */
+    top: calc(100% + 10px); /* Position below the toggle */
+    right: 0;
+    background-color: #4a0072; /* Darker dropdown background */
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.3);
+    min-width: 200px; /* Minimum width */
+    padding: 8px;
+    z-index: 1001;
+    opacity: 0;
+    visibility: hidden;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, transform 0.2s ease, visibility 0.2s;
+}
+
+.user-menu-dropdown.is-open {
+    display: flex; /* Show when open */
+    opacity: 1;
+    visibility: visible;
+    transform: translateY(0);
+}
+
+.user-menu-dropdown a {
+    color: rgba(255, 255, 255, 0.85);
+    text-decoration: none;
+    padding: 10px 15px; /* Consistent padding */
+    border-radius: 5px;
+    font-size: 0.95rem;
+    font-weight: 500;
+    transition: background-color 0.2s ease, color 0.2s ease;
+    white-space: nowrap;
+}
+
+.user-menu-dropdown a:hover {
+    background-color: var(--color-primary); /* Use primary color for hover */
+    color: #ffffff;
+    text-decoration: none;
+}
+
+.dropdown-divider {
+    display: block;
+    height: 1px;
+    background-color: rgba(255, 255, 255, 0.15);
+    margin: 8px 0; /* Add vertical margin */
+}
+
+/* Styles for Mobile Overlay */
+@media (max-width: 768px) {
+    .user-menu {
+        width: 100%; /* Take full width in mobile overlay */
+        display: flex; /* Needed for column layout */
+        flex-direction: column;
+        align-items: center;
+    }
+    .user-menu-toggle {
+        display: none; /* Hide the button itself */
+    }
+    .user-menu-dropdown {
+        display: flex; /* Always display in mobile overlay */
+        position: static; /* Not absolute */
+        background: none;
+        border: none;
+        box-shadow: none;
+        width: 100%;
+        padding: 0;
+        opacity: 1;
+        visibility: visible;
+        transform: none;
+        align-items: center; /* Center links */
+        gap: 1.5rem; /* Same gap as other mobile links */
+    }
+    .user-menu-dropdown a {
+        font-size: 1.2rem;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.7);
+        padding: 5px; /* Minimal padding for mobile */
+    }
+    .user-menu-dropdown a:hover {
+        background: none; /* No background hover in mobile */
+        color: var(--color-warning);
+    }
+    .dropdown-divider {
+        display: none; /* Hide divider in mobile */
+    }
+}
+
+
+/* Show desktop elements only on larger screens */
+@media (min-width: 769px) {
+    .user-menu-toggle {
+        display: flex; /* Show toggle button on desktop */
+    }
+}

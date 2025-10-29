@@ -1,0 +1,75 @@
+ // --- DOM Referenzen ---
+ export const viewModeSelector = document.getElementById('view-mode-selector');
+ export const classSelectorContainer = document.getElementById('class-selector-container');
+ export const classSelector = document.getElementById('class-selector');
+ export const teacherSelectorContainer = document.getElementById('teacher-selector-container');
+ export const teacherSelector = document.getElementById('teacher-selector');
+ export const yearSelector = document.getElementById('year-selector');
+ export const weekSelector = document.getElementById('week-selector');
+ export const dateSelector = document.getElementById('date-selector');
+ export const timetableContainer = document.getElementById('timetable-container');
+ export const modal = document.getElementById('timetable-modal');
+ // Verhindere Fehler, wenn das Modal (z.B. auf anderen Seiten) nicht existiert
+ export const modalTitle = document.getElementById('modal-title');
+ export const form = document.getElementById('timetable-entry-form');
+ export const deleteBtn = document.getElementById('delete-entry-btn');
+ export const modalTabs = modal ? modal.querySelectorAll('.modal-tabs .tab-button') : [];
+ export const regularFields = document.getElementById('regular-fields');
+ export const substitutionFields = document.getElementById('substitution-fields');
+ export const substitutionTypeSelect = document.getElementById('substitution_type');
+ export const publishWeekLabel = document.getElementById('publish-week-label');
+ export const publishStatusStudent = document.getElementById('publish-status-student');
+ export const publishStatusTeacher = document.getElementById('publish-status-teacher');
+ export const publishStudentBtn = document.getElementById('publish-student-btn');
+ export const publishTeacherBtn = document.getElementById('publish-teacher-btn');
+ export const unpublishStudentBtn = document.getElementById('unpublish-student-btn');
+ export const unpublishTeacherBtn = document.getElementById('unpublish-teacher-btn');
+ export const regularCommentInput = document.getElementById('regular_comment');
+ export const substitutionCommentInput = document.getElementById('substitution_comment');
+ 
+ // *** Konflikt-Warnung ***
+ export const conflictWarningBox = document.getElementById('modal-conflict-warning');
+ export const saveButton = document.getElementById('modal-save-btn');
+ // Füge eine Prüfung hinzu, ob 'modal' existiert
+ export const conflictCheckFields = modal ? modal.querySelectorAll('.conflict-check') : []; // Alle Felder, die Prüfung auslösen
+ 
+ // *** DOM Referenzen für Kopiermodal ***
+ export const copyWeekBtn = document.getElementById('copy-week-btn');
+ export const copyWeekModal = document.getElementById('copy-week-modal');
+ export const copyWeekForm = document.getElementById('copy-week-form');
+ export const copySourceDisplay = document.getElementById('copy-source-display');
+ export const copyTargetYear = document.getElementById('copy-target-year');
+ export const copyTargetWeek = document.getElementById('copy-target-week');
+ export const copyWeekConfirmBtn = document.getElementById('copy-week-confirm-btn');
+ export const copyWeekCancelBtn = document.getElementById('copy-week-cancel-btn');
+ 
+ // *** NEUE DOM Referenzen für Vorlagen ***
+ export const createTemplateBtn = document.getElementById('create-template-btn');
+ export const applyTemplateBtn = document.getElementById('apply-template-btn');
+ export const manageTemplatesBtn = document.getElementById('manage-templates-btn');
+ export const manageTemplatesModal = document.getElementById('manage-templates-modal');
+ export const manageTemplatesViewContainer = document.getElementById('manage-templates-view-container'); // Container für Ansichten
+ export const templateListView = document.getElementById('template-list-view'); // Ansicht: Liste
+ export const templateEditorView = document.getElementById('template-editor-view'); // Ansicht: Editor
+ export const manageTemplatesForm = document.getElementById('create-template-form'); // Form zum Erstellen aus Woche
+ export const createEmptyTemplateBtn = document.getElementById('create-empty-template-btn'); // Button für leere Vorlage
+ export const manageTemplatesList = document.getElementById('templates-list-container');
+ export const manageTemplatesCloseBtn = document.getElementById('manage-templates-close-btn');
+ export const templateEditorTitle = document.getElementById('template-editor-title');
+ export const templateEditorGridContainer = document.getElementById('template-editor-grid-container'); // Grid-Container
+ export const backToTemplateListBtn = document.getElementById('back-to-template-list-btn'); // Zurück zur Liste
+ export const saveTemplateEditorBtn = document.getElementById('save-template-editor-btn'); // Speichern im Editor
+ export const applyTemplateModal = document.getElementById('apply-template-modal');
+ export const applyTemplateForm = document.getElementById('apply-template-form');
+ export const applyTemplateSelect = document.getElementById('apply-template-select');
+ export const applyTemplateConfirmBtn = document.getElementById('apply-template-confirm-btn');
+ export const applyTemplateCancelBtn = document.getElementById('apply-template-cancel-btn');
+ 
+ // *** Konstanten für Grid-Rendering ***
+ export const days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
+ export const timeSlots = [
+     "08:00 - 08:45", "08:55 - 09:40", "09:40 - 10:25", "10:35 - 11:20",
+     "11:20 - 12:05", "13:05 - 13:50", "13:50 - 14:35", "14:45 - 15:30",
+     "15:30 - 16:15", "16:25 - 17:10"
+ ];
+

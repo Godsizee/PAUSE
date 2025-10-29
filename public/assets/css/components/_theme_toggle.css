@@ -1,0 +1,55 @@
+/* public/assets/css/components/_theme_toggle.css */
+
+.theme-toggle {
+    background: none;
+    border: none;
+    padding: 5px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 50%;
+    transition: background-color 0.2s ease;
+    width: 34px; /* Fixed size */
+    height: 34px;
+}
+
+.theme-toggle:hover {
+    background-color: rgba(255, 255, 255, 0.15);
+}
+
+.theme-toggle img {
+    width: 20px; /* Icon size */
+    height: 20px;
+    display: block;
+}
+
+/* Initially hide moon icon, show sun */
+.theme-toggle .moon-icon {
+    display: none;
+}
+.theme-toggle .sun-icon {
+    display: block;
+}
+
+/* When dark mode is active, hide sun, show moon */
+.dark-mode .theme-toggle .moon-icon {
+    display: block;
+}
+.dark-mode .theme-toggle .sun-icon {
+    display: none;
+}
+
+/* Add a separator only on desktop */
+.nav-separator {
+    display: none; /* Hidden by default / mobile */
+}
+
+@media (min-width: 769px) {
+    .nav-separator {
+        display: block;
+        width: 1px;
+        height: 20px;
+        background-color: rgba(255, 255, 255, 0.2);
+    }
+}

@@ -1,0 +1,19 @@
+# .htaccess
+# Aktiviert die URL-Rewrite-Engine von Apache
+RewriteEngine On
+
+# Definiert die Basis für die Rewrite-Regeln.
+# WICHTIG: Passen Sie diesen Pfad an Ihr lokales Setup an!
+# Wenn Ihre Seite unter http://localhost/PAUSE/public/ läuft, lautet der Pfad /PAUSE/public/
+RewriteBase /PAUSE/public/
+
+# Bedingung 1: Führe die Regel nicht aus, wenn die URL eine existierende Datei ist.
+RewriteCond %{REQUEST_FILENAME} !-f
+
+# Bedingung 2: Führe die Regel nicht aus, wenn die URL ein existierendes Verzeichnis ist.
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Regel: Leite alle anderen Anfragen an die index.php weiter.
+# Der ursprüngliche Pfad wird als 'url'-Parameter übergeben.
+# [L] = Letzte Regel; [QSA] = Hänge bestehende Query-Parameter an.
+RewriteRule ^(.*)$ index.php?url=$1 [L,QSA]

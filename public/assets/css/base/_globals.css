@@ -1,0 +1,24 @@
+body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    margin: 0;
+    padding-top: 80px; /* Platz für den fixierten Header */
+    display: flex;
+    flex-direction: column;
+    min-height: calc(100vh - 80px);
+}
+
+.main-title {
+    color: var(--color-primary);
+    font-family: var(--font-display);
+}
+
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+}
+
+a:hover {
+    text-decoration: underline;
+}

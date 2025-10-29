@@ -1,0 +1,8 @@
+# Erlaubt Apache, das Verzeichnis zu verarbeiten, damit die RewriteRule ausgeführt werden kann
+Options +Indexes
+
+# Schaltet die URL-Rewrite-Engine von Apache ein
+RewriteEngine On
+
+# Leitet den Aufruf des Stammverzeichnisses an public/login weiter
+RewriteRule ^$ public/login [L,R=302]

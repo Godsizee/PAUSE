@@ -1,0 +1,18 @@
+# public/.htaccess
+
+# Schaltet die URL-Rewrite-Engine von Apache ein
+RewriteEngine On
+
+# Definiert den Basis-URL-Pfad für die Rewrite-Regeln.
+# Dies ist der entscheidende Teil, der Apache sagt, in welchem Ordner das Projekt liegt.
+RewriteBase /files/PAUSE/public/
+
+# Bedingung 1: Führe die Regel nicht aus, wenn die angeforderte URL eine existierende Datei ist.
+RewriteCond %{REQUEST_FILENAME} !-f
+
+# Bedingung 2: Führe die Regel nicht aus, wenn die angeforderte URL ein existierendes Verzeichnis ist.
+RewriteCond %{REQUEST_FILENAME} !-d
+
+# Regel: Leite alle anderen Anfragen an die index.php in diesem Verzeichnis weiter.
+RewriteRule ^(.*)$ index.php?url=$1 [L,QSA]
+

@@ -1,0 +1,4 @@
+﻿username,email,password,role,first_name,last_name,birth_date,class_id,teacher_id
+max.mustermann,max@schule.de,Geheim123,schueler,Max,Mustermann,2005-10-20,101,
+lisa.lehrer,lisa@schule.de,Sicher456,lehrer,Lisa,Lehrer,1980-05-15,,1
+peter.planer,peter@schule.de,Planer789,planer,Peter,Planer,1990-01-01,,

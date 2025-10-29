@@ -1,0 +1,85 @@
+/* public/assets/css/components/_mobile_menu.css */
+
+/* === Mobile Menu Toggle Button (Hamburger) === */
+
+.mobile-menu-toggle {
+    display: block; /* Hidden on desktop via media query */
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 10px;
+    margin: -10px; /* Offset padding to align visually */
+    z-index: 1002; /* Above the overlay nav */
+}
+
+.hamburger-box {
+    width: 30px;
+    height: 24px;
+    display: inline-block;
+    position: relative;
+}
+
+.hamburger-inner,
+.hamburger-inner::before,
+.hamburger-inner::after {
+    width: 100%;
+    height: 3px;
+    background-color: #fff; /* White lines */
+    border-radius: 4px;
+    position: absolute;
+    transition-property: transform;
+    transition-duration: 0.15s;
+    transition-timing-function: ease;
+}
+
+.hamburger-inner::before,
+.hamburger-inner::after {
+    content: "";
+    display: block;
+    /* Adjusted transition for a smoother animation */
+    transition: top 0.1s 0.15s ease-in, bottom 0.1s 0.15s ease-in, transform 0.15s cubic-bezier(0.55, 0.055, 0.675, 0.19), opacity 0s 0.15s;
+}
+
+.hamburger-inner {
+    top: 50%;
+    transform: translateY(-50%);
+    /* Adjusted transition for middle bar */
+    transition: background-color 0s 0.15s linear;
+}
+
+.hamburger-inner::before {
+    top: -10px;
+}
+
+.hamburger-inner::after {
+    bottom: -10px;
+}
+
+/* --- Hamburger Animation --- */
+.mobile-menu-toggle.is-open .hamburger-inner {
+    transform: rotate(225deg); /* Adjusted rotation */
+    transition-delay: 0s;
+    transition-timing-function: cubic-bezier(0.215, 0.61, 0.355, 1);
+    background-color: var(--color-warning); /* Change color on open */
+}
+
+.mobile-menu-toggle.is-open .hamburger-inner::before {
+    top: 0;
+    transform: rotate(-45deg); /* Rotate opposite */
+    opacity: 0; /* Fade out */
+    transition: top 0.1s ease-out, opacity 0.1s ease-out;
+}
+
+.mobile-menu-toggle.is-open .hamburger-inner::after {
+    bottom: 0;
+    transform: rotate(-90deg); /* Rotate to form X */
+    transition: bottom 0.1s ease-out, transform 0.15s 0.15s cubic-bezier(0.215, 0.61, 0.355, 1);
+}
+
+
+/* Hide mobile toggle on larger screens */
+@media (min-width: 769px) {
+    .mobile-menu-toggle {
+        display: none;
+    }
+}
