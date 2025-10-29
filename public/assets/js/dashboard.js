@@ -324,6 +324,7 @@ const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvent
                 time: formatTimeSlot(period),
                 type: substitution.substitution_type,
                 id: substitution.substitution_id, // ID für ICS-Link (Sonderevent)
+                class_id: substitution.class_id, // HINZUGEFÜGT
                 subject: substitution.new_subject_shortcut || regularEntry?.subject_shortcut || (substitution.substitution_type === 'Sonderevent' ? 'EVENT' : '---'),
                 mainText: substitution.substitution_type === 'Vertretung'
                     ? (userRole === 'teacher' ? (substitution.class_name || regularEntry?.class_name) : substitution.new_teacher_shortcut)
@@ -340,6 +341,7 @@ const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvent
                 time: formatTimeSlot(period),
                 type: 'regular',
                 id: regularEntry.entry_id,
+                class_id: regularEntry.class_id, // HINZUGEFÜGT
                 subject: regularEntry.subject_shortcut || '---',
                 mainText: userRole === 'schueler' ? regularEntry.teacher_shortcut : regularEntry.class_name,
                 room: regularEntry.room_name || '---',
@@ -392,12 +394,21 @@ const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvent
         }
         // *** ENDE NEUE LOGIK ***
 
+        // NEU: mainText mit ID für Lehrer
+        let mainText = '';
+        if (userRole === 'lehrer') {
+            mainText = app.class_name 
+                ? `Klasse: ${escapeHtml(app.class_name)} (ID: ${escapeHtml(app.class_id)})` 
+                : 'Schüler';
+        }
+
         combinedSchedule.push({
             sortKey: sortKeyTime,
             time: appTime,
             type: 'appointment',
+            class_id: app.class_id, // HINZUGEFÜGT
             subject: userRole === 'schueler' ? `Sprechstunde (${escapeHtml(app.teacher_shortcut || app.teacher_name)})` : `Sprechstunde (${escapeHtml(app.student_name)})`,
-            mainText: userRole === 'lehrer' ? (app.class_name ? `Klasse: ${escapeHtml(app.class_name)}` : 'Schüler') : '',
+            mainText: mainText, // Verwendet die neue Variable
             room: 'Sprechzimmer',
             comment: app.notes || '',
             note: '', // NEU (Keine Notizen für Termine)
@@ -433,7 +444,15 @@ const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvent
 
         
         let detailsHtml = `<strong>${escapeHtml(item.subject)}</strong>`;
-        if(item.mainText && item.type !== 'Entfall') detailsHtml += `<span>${escapeHtml(item.mainText)}</span>`;
+        if(item.mainText && item.type !== 'Entfall') {
+            // ▼▼▼ HIER IST DIE ÄNDERUNG FÜR "MEIN TAG" ▼▼▼
+            if (userRole === 'lehrer' && item.type !== 'appointment' && item.class_id) {
+                detailsHtml += `<span>${escapeHtml(item.mainText)} (ID: ${escapeHtml(item.class_id)})</span>`;
+            } else {
+                detailsHtml += `<span>${escapeHtml(item.mainText)}</span>`;
+            }
+            // ▲▲▲ ENDE DER ÄNDERUNG ▲▲▲
+        }
         if(item.room && item.type !== 'Entfall') detailsHtml += `<span>${escapeHtml(item.room)}</span>`;
 
         let actionButton = '';
@@ -581,7 +600,8 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
                     substitution.new_room_name || regularEntry?.room_name,
                     substitution.comment, 
                     substitution.substitution_type,
-                    note // NEU
+                    note, // NEU
+                    substitution.class_id // HINZUGEFÜGT
                 );
             } else if (entryToRender) {
                 cellClass = 'has-entry';
@@ -589,12 +609,12 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
                 dataAttrs += ` data-class-id="${entryToRender.class_id}"`;
                 if (entryToRender.block_id) dataAttrs += ` data-block-id="${entryToRender.block_id}"`;
                 const mainText = userRole === 'schueler' ? entryToRender.teacher_shortcut : entryToRender.class_name;
-                cellContent += createCellEntryHtml(entryToRender.subject_shortcut, mainText, entryToRender.room_name, entryToRender.comment, null, note); // NEU
+                cellContent += createCellEntryHtml(entryToRender.subject_shortcut, mainText, entryToRender.room_name, entryToRender.comment, null, note, entryToRender.class_id); // NEU + class_id
             } else if (period >= startHour && period <= endHour) {
                 // KORREKTUR: Logik für FU
                 if (period === startHour || period === endHour) {
                     cellClass = 'default-entry';
-                    cellContent = createCellEntryHtml('FU', 'Förderunterricht', '', ''); // FU anzeigen
+                    cellContent = createCellEntryHtml('FU', 'Förderunterricht', '', '', null, null, null); // FU anzeigen
                 } else {
                     // Bleibt leer (cellClass = 'empty')
                 }
@@ -619,10 +639,21 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
 /**
  * Helper to create HTML content for a single cell entry.
  */
-const createCellEntryHtml = (subject, mainText, room, comment = null, substitutionType = null, note = null) => {
+// ▼▼▼ HIER IST DIE ZWEITE ÄNDERUNG (createCellEntryHtml) ▼▼▼
+const createCellEntryHtml = (subject, mainText, room, comment = null, substitutionType = null, note = null, class_id = null) => {
     let commentHtml = comment ? `<small class="entry-comment" title="${escapeHtml(comment)}">📝 ${escapeHtml(comment.substring(0, 15))}${comment.length > 15 ? '...' : ''}</small>` : '';
     let roomHtml = room ? `<small class="entry-room">${escapeHtml(room)}</small>` : '';
-    let mainHtml = mainText ? `<span>${escapeHtml(mainText)}</span>` : '';
+    
+    // ALT: let mainHtml = mainText ? `<span>${escapeHtml(mainText)}</span>` : '';
+    let mainHtml = ''; // NEU
+    if (mainText) {
+        if (userRole === 'lehrer' && class_id) { // userRole ist global in dashboard.js
+            mainHtml = `<span>${escapeHtml(mainText)} (ID: ${escapeHtml(class_id)})</span>`;
+        } else {
+            mainHtml = `<span>${escapeHtml(mainText)}</span>`;
+        }
+    }
+    
     let subjectHtml = subject ? `<strong>${escapeHtml(subject)}</strong>` : '';
     // NEU: Notiz-Icon (SVG)
     const noteIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 0A1.5 1.5 0 0 0 0 1.5V13a1 1 0 0 0 1 1V1.5a.5.5 0 0 1 .5-.5H14a1 1 0 0 0-1-1zM3.5 2A1.5 1.5 0 0 0 2 3.5v11A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 12.5 2zM3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z"/></svg>`;
@@ -644,10 +675,11 @@ const createCellEntryHtml = (subject, mainText, room, comment = null, substituti
         mainHtml = safeComment ? `<span title="${safeComment}">${safeComment.substring(0, 20)}${safeComment.length > 20 ? '...' : ''}</span>` : `<span>Sonderveranst.</span>`;
         commentHtml = '';
     }
-
-    // NEU: Setze Notiz-Icon in die Zelle
+    
+    // KORREKTUR: noteHtml hinzugefügt
     return `<div class="cell-entry">${noteHtml}${subjectHtml}${mainHtml}${roomHtml}${commentHtml}</div>`;
 };
+// ▲▲▲ ENDE DER ÄNDERUNG (createCellEntryHtml) ▲▲▲
 
 /** Function to handle PDF export by redirecting to server */
 const handlePdfExport = () => {
@@ -1222,4 +1254,3 @@ function initializePlanDetailModal(timetableContainer, modal, closeBtn, noteRow,
         });
     }
 }
-

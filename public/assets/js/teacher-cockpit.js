@@ -33,6 +33,27 @@ function formatDayOfWeek(dayNum) {
     return days[index] || 'Unbekannt';
 }
 
+// ▼▼▼ KORREKTUR: Fehlende Funktion hinzugefügt ▼▼▼
+/**
+ * Formatiert einen YYYY-MM-DD Datum in ein lesbares deutsches Format.
+ * @param {string} dateString - YYYY-MM-DD
+ * @returns {string} TT.MM.YYYY
+ */
+function formatGermanDate(dateString) {
+    if (!dateString) return '';
+    try {
+        const parts = dateString.split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}.${parts[1]}.${parts[0]}`;
+        }
+        return dateString;
+    } catch(e) {
+        return dateString;
+    }
+}
+// ▲▲▲ ENDE KORREKTUR ▲▲▲
+
+
 // Globale Variable für den Controller der Anwesenheitsliste
 let attendanceController = null;
 
