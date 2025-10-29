@@ -129,6 +129,7 @@ return [
     '#^api/teacher/current-lesson$#' => [TeacherController::class, 'getCurrentLessonWithStudentsApi'],
     '#^api/teacher/attendance/save$#' => [TeacherController::class, 'saveAttendanceApi'],
     '#^api/teacher/prerequisites$#' => [TeacherController::class, 'getPrerequisitesApi'],
+    '#^api/teacher/events$#' => [AcademicEventController::class, 'getForTeacher'],
 
     // --- API Routes für Sprechstunden ---
     '#^api/teacher/office-hours$#' => [TeacherController::class, 'getOfficeHoursApi'], 
