@@ -9,7 +9,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
 <div class="page-wrapper dashboard-wrapper">
     <h1 class="main-title">Mein Dashboard</h1>
 
-    <!-- Tab-Navigation (Schuppen) -->
     <nav class="tab-navigation">
         <button class="tab-button active" data-target="section-my-day">🗓️ Mein Tag</button>
         <button class="tab-button" data-target="section-weekly-plan">📅 Wochenplan</button>
@@ -22,9 +21,7 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
         <?php endif; ?>
 
         <?php if ($role === 'schueler' && !$settings['community_board_enabled']): // Nur wenn Schüler, aber Board deaktiviert ?>
-             <!-- <button class="tab-button" data-target="section-booking">🧑‍🏫 Sprechstunde buchen</button> -->
-             <!-- Platzhalter, falls Sprechstunde (ohne Community) später kommt -->
-        <?php endif; ?>
+             <?php endif; ?>
 
         <?php if ($role === 'lehrer'): ?>
             <button class="tab-button" data-target="section-attendance">✅ Anwesenheit</button>
@@ -38,10 +35,8 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
         <?php endif; ?>
     </nav>
 
-    <!-- Tab-Inhalt -->
     <div class="tab-content">
 
-        <!-- Tab 1: Mein Tag (Standard) -->
         <div class="dashboard-section active" id="section-my-day">
             <h2 class="section-title-hidden">Mein Tag <small>(<?php echo $dayOfWeekName . ', ' . $dateFormatted; ?>)</small></h2>
             <div id="today-schedule-container" class="today-schedule-container">
@@ -49,7 +44,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
             </div>
         </div>
 
-        <!-- Tab 2: Wochenplan -->
         <div class="dashboard-section" id="section-weekly-plan">
             <section class="weekly-timetable-section" id="weekly-timetable-section-printable">
                 <div class="dashboard-header">
@@ -93,16 +87,13 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
             <?php endif; ?>
         </div>
 
-        <!-- Tab 3: Ankündigungen -->
         <div class="dashboard-section" id="section-announcements">
             <div id="announcements-list" class="sidebar-widget-content">
                 <div class="loading-spinner"></div>
             </div>
         </div>
 
-        <!-- Schüler-Tabs (Bedingt) -->
         <?php if ($role === 'schueler' && $settings['community_board_enabled']): ?>
-            <!-- Tab 4: Schwarzes Brett -->
             <div class="dashboard-section" id="section-community-board">
                 <h4>Digitales Schwarzes Brett</h4>
                 <p class="form-hint" style="margin-bottom: 20px;">Informeller Feed für Fundsachen, AGs, Nachhilfe, etc. Beiträge von Schülern werden vor der Veröffentlichung geprüft.</p>
@@ -130,25 +121,20 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                 </div>
             </div>
 
-            <!-- Tab 5: Deine Beiträge -->
             <div class="dashboard-section" id="section-my-posts">
-                 <h4>Deine Beiträge</h4>
-                 <p class="form-hint" style="margin-bottom: 20px;">Hier siehst du den Status deiner eingereichten Beiträge und kannst sie bearbeiten. Bearbeitete Beiträge werden erneut zur Moderation vorgelegt.</p>
-                 
-                 <div id="my-posts-list" class="posts-list-container my-posts-container" style="max-height: 60vh; overflow-y: auto;">
+                <h4>Deine Beiträge</h4>
+                <p class="form-hint" style="margin-bottom: 20px;">Hier siehst du den Status deiner eingereichten Beiträge und kannst sie bearbeiten. Bearbeitete Beiträge werden erneut zur Moderation vorgelegt.</p>
+                
+                <div id="my-posts-list" class="posts-list-container my-posts-container" style="max-height: 60vh; overflow-y: auto;">
                     <div class="loading-spinner"></div>
-                 </div>
+                </div>
             </div>
 
-            <!-- Tab X: Sprechstunde Buchen -->
-            <!-- <div class="dashboard-section" id="section-booking"> ... (Code für Sprechstunden) ... </div> -->
-        <?php endif; ?>
+            <?php endif; ?>
 
 
-        <!-- Lehrer-Tabs -->
         <?php if ($role === 'lehrer'): ?>
             <div id="teacher-cockpit" style="display: contents;">
-                <!-- Tab 6: Anwesenheit -->
                 <div class="dashboard-section" id="section-attendance">
                     <div class="cockpit-feature" id="attendance-feature">
                         <h4>Digitale Anwesenheit</h4>
@@ -171,7 +157,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                     </div>
                 </div>
 
-                <!-- Tab 7: Aufgaben/Klausuren -->
                 <div class="dashboard-section" id="section-events">
                     <div class="cockpit-feature" id="academic-events-feature">
                         <h4>Aufgaben & Klausuren verwalten</h4>
@@ -222,7 +207,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                     </div>
                 </div>
 
-                <!-- Tab 8: Sprechzeiten verwalten -->
                 <div class="dashboard-section" id="section-office-hours">
                     <div class="cockpit-feature" id="office-hours-feature">
                         <h4>Sprechstunden verwalten</h4>
@@ -265,7 +249,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                     </div>
                 </div>
 
-                <!-- Tab 9: Kollegensuche -->
                 <div class="dashboard-section" id="section-colleague-search">
                     <div class="cockpit-feature" id="find-colleague-feature">
                         <h4>Wo ist...? (Kollegensuche)</h4>
@@ -282,7 +265,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                     </div>
                 </div>
                 
-                <!-- NEU: Community Board Tab für Lehrer (falls aktiviert) -->
                 <?php if ($settings['community_board_enabled']): ?>
                 <div class="dashboard-section" id="section-community-board">
                     <h4>Digitales Schwarzes Brett</h4>
@@ -415,4 +397,3 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
 <?php
 include_once __DIR__ . '/partials/footer.php';
 ?>
-

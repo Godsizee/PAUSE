@@ -68,8 +68,8 @@ export function initializeTeacherCockpit() {
             try {
                 const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/teacher/search-colleagues?query=${encodeURIComponent(query)}`);
                 if (response.success && response.data) {
-                     const filteredTeachers = response.data.filter(t => t.teacher_shortcut !== 'SGL');
-                     if (filteredTeachers.length > 0) {
+                      const filteredTeachers = response.data.filter(t => t.teacher_shortcut !== 'SGL');
+                      if (filteredTeachers.length > 0) {
                         searchResults.innerHTML = filteredTeachers.map(teacher => `
                             <div class="search-result-item" data-id="${teacher.teacher_id}" data-name="${escapeHtml(teacher.first_name)} ${escapeHtml(teacher.last_name)} (${escapeHtml(teacher.teacher_shortcut)})">
                                 <strong>${escapeHtml(teacher.last_name)}, ${escapeHtml(teacher.first_name)}</strong> (${escapeHtml(teacher.teacher_shortcut)})
