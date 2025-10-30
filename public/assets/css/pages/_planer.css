@@ -704,6 +704,46 @@ small.absence-warning {
     cursor: pointer;
 }
 
+/* KORREKTUR: Layout für das Abwesenheits-Formular (flacher und breiter) */
+#absence-form.absence-form-layout {
+    display: grid;
+    /* Nutzt auto-fit, um Spalten bei Bedarf umzubrechen */
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 15px 20px;
+    align-items: flex-end; /* Richtet Elemente an der Unterkante aus (wichtig für Aktionen) */
+}
+
+/* Einzelne Formulargruppen */
+#absence-form.absence-form-layout .form-group {
+    margin-bottom: 0; /* Wird durch grid-gap ersetzt */
+}
+
+/* Lehrergruppe und Kommentargruppe sollen mehr Platz einnehmen, wenn möglich */
+@media (min-width: 993px) {
+    #absence-form.absence-form-layout #absence-teacher-group,
+    #absence-form.absence-form-layout #absence-comment-group {
+        /* Nimmt 2 Spalten ein, wenn das Grid mehr als 2 Spalten hat */
+        grid-column: span 2; 
+    }
+    
+    /* Auf sehr breiten Bildschirmen (mehr als 4 Items nebeneinander) */
+    @media (min-width: 1200px) {
+        #absence-form.absence-form-layout #absence-teacher-group {
+             grid-column: span 3;
+        }
+        #absence-form.absence-form-layout #absence-comment-group {
+             grid-column: span 2;
+        }
+    }
+}
+
+/* Aktions-Gruppe ganz unten und volle Breite */
+#absence-form.absence-form-layout #absence-actions-group {
+    grid-column: 1 / -1; /* Volle Breite */
+    margin-top: 10px; /* Kleiner Abstand nach oben */
+}
+
+
 /* Responsive für Abwesenheits-Seite */
 @media (max-width: 992px) {
     .absence-container {
@@ -716,5 +756,14 @@ small.absence-warning {
     #absence-calendar {
         max-height: 60vh; /* Etwas weniger Höhe auf Mobilgeräten */
     }
-}
 
+    /* KORREKTUR: Auf Mobilgeräten das Formular-Grid vereinfachen */
+    #absence-form.absence-form-layout {
+        grid-template-columns: 1fr; /* Alles untereinander */
+    }
+
+    #absence-form.absence-form-layout #absence-teacher-group,
+    #absence-form.absence-form-layout #absence-comment-group {
+        grid-column: 1 / -1; /* Volle Breite (Standard) */
+    }
+}
