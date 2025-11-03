@@ -47,6 +47,10 @@
                class="dashboard-nav-item <?php echo (str_contains($currentUrl, 'admin/audit-logs') ? 'active' : ''); ?>">
                 Audit Log (Protokoll)
             </a>
+            <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('admin/system-health')); ?>"
+               class="dashboard-nav-item <?php echo (str_contains($currentUrl, 'admin/system-health') ? 'active' : ''); ?>">
+                System-Status
+            </a>
             <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('admin/settings')); ?>"
                class="dashboard-nav-item <?php echo (str_contains($currentUrl, 'admin/settings') ? 'active' : ''); ?>">
                 Einstellungen

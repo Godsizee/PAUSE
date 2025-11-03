@@ -2,7 +2,7 @@
 // app/Core/Cache.php
 // MODIFIZIERT: Logik zum Löschen des Caches hinzugefügt.
 
-namespace App\Core;
+namespace App\Core; // KORRIGIERT: Namespace muss App\Core sein, nicht App
 
 class Cache
 {
@@ -27,6 +27,8 @@ class Cache
         $cacheDir = self::getCacheDir();
 
         if (!is_dir($cacheDir)) {
+            // Wenn das Verzeichnis nicht existiert, ist das kein Fehler,
+            // es gibt einfach nichts zu tun.
             return ['success' => true, 'message' => 'Cache-Verzeichnis existiert nicht, nichts zu tun.'];
         }
 
@@ -60,10 +62,10 @@ class Cache
         }
 
         if ($successCount === 0) {
-            return ['success' => true, 'message' => 'Cache war bereits leer.'];
+            return ['success' => true, 'message' => 'App-Cache war bereits leer.'];
         }
 
-        return ['success' => true, 'message' => "Erfolgreich $successCount Cache-Datei(en) gelöscht."];
+        return ['success' => true, 'message' => "Erfolgreich $successCount App-Cache-Datei(en) gelöscht."];
     }
     
     // Zukünftige Cache-Methoden (get, set, etc.) würden hier hinkommen
