@@ -24,9 +24,10 @@ class AcademicEventController
     public function __construct()
     {
         $this->pdo = Database::getInstance();
+        // KORREKTUR: Die $pdo-Instanz muss an die Repositories übergeben werden
         $this->eventRepo = new AcademicEventRepository($this->pdo);
         $this->userRepo = new UserRepository($this->pdo);
-        $this->stammdatenRepo = new StammdatenRepository($this->pdo); // NEU
+        $this->stammdatenRepo = new StammdatenRepository($this->pdo); 
     }
 
     /**

@@ -75,63 +75,67 @@ export function initializeDashboardCommunity() {
     };
 
     // 3. Formular-Handler
-    form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        
-        const title = titleInput.value.trim();
-        const content = contentInput.value.trim();
+    if (form) {
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const title = titleInput.value.trim();
+            const content = contentInput.value.trim();
 
-        if (!title || !content) {
-            showToast("Titel und Inhalt dürfen nicht leer sein.", "error");
-            return;
-        }
-
-        createButton.disabled = true;
-        postSpinner.style.display = 'block';
-
-        try {
-            const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/community/posts/create`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ title, content })
-            });
-
-            if (response.success) {
-                showToast(response.message, 'success');
-                form.reset(); // Formular leeren
-                // Wenn der Beitrag sofort freigeschaltet wurde, Liste neu laden
-                if (response.status === 'approved') {
-                    hasLoaded = false; // Erzwinge Neuladen der Liste
-                    loadCommunityPosts();
-                }
+            if (!title || !content) {
+                showToast("Titel und Inhalt dürfen nicht leer sein.", "error");
+                return;
             }
-            // Fehler werden von apiFetch als Toast angezeigt
-        } catch (error) {
-            console.error("Fehler beim Erstellen des Beitrags:", error);
-        } finally {
-            createButton.disabled = false;
-            postSpinner.style.display = 'none';
-        }
-    });
+
+            createButton.disabled = true;
+            postSpinner.style.display = 'block';
+
+            try {
+                const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/community/posts/create`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ title, content })
+                });
+
+                if (response.success) {
+                    showToast(response.message, 'success');
+                    form.reset(); // Formular leeren
+                    // Wenn der Beitrag sofort freigeschaltet wurde, Liste neu laden
+                    if (response.status === 'approved') {
+                        hasLoaded = false; // Erzwinge Neuladen der Liste
+                        loadCommunityPosts();
+                    }
+                }
+                // Fehler werden von apiFetch als Toast angezeigt
+            } catch (error) {
+                console.error("Fehler beim Erstellen des Beitrags:", error);
+            } finally {
+                createButton.disabled = false;
+                postSpinner.style.display = 'none';
+            }
+        });
+    }
 
     // 4. KORRIGIERTES Laden (Lazy Loading)
     const tabButton = document.querySelector('.tab-button[data-target="section-community-board"]');
     
     if (tabButton) {
-        // Diese Funktion wird *nur* auf den Klick hin ausgeführt.
+        // Diese Funktion wird aufgerufen, wenn der Tab geklickt wird (von dashboard.js)
         const loadOnVisible = () => {
-            if (!hasLoaded) { // Lade nur, wenn noch nicht geladen
+            // Prüft, ob der Tab aktiv ist (von dashboard.js gesetzt) UND ob noch nicht geladen wurde
+            if (section.classList.contains('active') && !hasLoaded) {
                 loadCommunityPosts();
             }
         };
 
-        // Beim Klick auf den Tab-Button (erneut) prüfen
+        // Fügt einen Listener hinzu, falls der Tab später erneut geklickt wird
         tabButton.addEventListener('click', loadOnVisible);
 
-        // Prüfe beim Start NICHT, da "Mein Tag" der Standard-Tab ist.
-        // Die Tab-Umschaltlogik in dashboard.js (die wir nicht sehen)
-        // ändert die 'active'-Klasse, und dieser Klick-Listener
-        // wird ausgelöst, WENN der Benutzer auf den Tab klickt.
+        // KORREKTUR: Prüfe sofort, ob der Tab bereits aktiv ist.
+        // (Die dashboard.js-Tablogik setzt 'active' *bevor* sie initializeDashboardCommunity aufruft)
+        if (section.classList.contains('active')) {
+            loadOnVisible();
+        }
         
     } else {
         // Fallback, falls die Tab-Logik fehlschlägt
