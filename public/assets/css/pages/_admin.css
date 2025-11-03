@@ -630,3 +630,56 @@ input:checked ~ .toggle-status { color: var(--color-success); }
 .dark-mode .health-widget.widget-permissions .health-label {
      color: var(--color-text-muted);
 }
+
+/* --- NEU: STILE FÜR IMPERSONATION-BANNER --- */
+.impersonation-banner {
+    background-color: var(--color-warning);
+    color: #000;
+    padding: 12px 0;
+    font-size: 0.9rem;
+    position: sticky;
+    top: 0;
+    z-index: 1050; /* Muss über dem Header liegen */
+    border-bottom: 2px solid rgba(0,0,0,0.2);
+}
+.impersonation-banner strong {
+    font-weight: 700;
+}
+.impersonation-banner a.btn {
+    background-color: rgba(255,255,255,0.8);
+    color: #000;
+    border-color: rgba(0,0,0,0.2);
+    font-weight: 700;
+}
+.impersonation-banner a.btn:hover {
+    background-color: #fff;
+    color: #000;
+}
+
+/* KORREKTUR: Erzwingt, dass der Header *unter* dem Banner beginnt */
+body:has(.impersonation-banner) .main-header {
+    top: 52px; /* Höhe des Banners */
+}
+/* KORREKTUR: Erzwingt, dass die Admin-Sidebar *unter* dem Banner beginnt */
+body:has(.impersonation-banner) .dashboard-sidebar {
+    top: 152px; /* 100px (Basis) + 52px (Banner) */
+}
+
+
+/* --- NEU: Icons für Admin-Buttons (falls Sie Feather-Icons o.ä. verwenden) --- */
+/* Wenn Sie keine Icon-Schriftart haben, können Sie diese ignorieren oder SVGs verwenden */
+.btn .icon-user-check,
+.btn .icon-edit,
+.btn .icon-trash {
+    display: inline-block;
+    width: 1em;
+    height: 1em;
+    margin-right: 5px;
+    /* Hier würden die SVG-Hintergründe oder Schriftart-Codes hinkommen */
+    /* Beispiel (setzt voraus, dass Sie eine Icon-Lib haben): */
+    font-family: 'feather'; /* Annahme */
+}
+/* Beispiel-Icons (müssen durch Ihre Icon-Bibliothek ersetzt werden) */
+.icon-user-check:before { content: '\e8a0'; } 
+.icon-edit:before { content: '\e890'; }
+.icon-trash:before { content: '\e891'; }

@@ -1,5 +1,6 @@
 <?php
 // config/routes.php
+// MODIFIZIERT: Zwei Routen für User-Impersonation hinzugefügt
 
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\DashboardController;
@@ -11,9 +12,9 @@ use App\Http\Controllers\Admin\CsvTemplateController;
 use App\Http\Controllers\Admin\AuditLogController;
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\CommunityController as AdminCommunityController;
-use App\Http\Controllers\Admin\SystemHealthController; // KORREKTUR: Importiert (falls Sie ihn von vorhin nutzen)
+use App\Http\Controllers\Admin\SystemHealthController; // NEU HINZUGEFÜGT
 use App\Http\Controllers\Planer\PlanController;
-use App\Http\Controllers\Planer\AbsenceController; 
+use App\Http\Controllers\Planer\AbsenceController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CommunityController;
 use App\Http\Controllers\IcalController;
@@ -27,6 +28,7 @@ return [
     '#^login$#' => [AuthController::class, 'showLogin'],
     '#^login/process$#' => [AuthController::class, 'handleLogin'],
     '#^logout$#' => [AuthController::class, 'logout'],
+    '#^logout/revert$#' => [AuthController::class, 'revertImpersonation'], // NEU: Impersonation beenden
 
     // --- Dashboard (Startseite nach Login) ---
     '#^$#' => [DashboardController::class, 'index'], // Root maps to dashboard
@@ -41,7 +43,7 @@ return [
     '#^admin/audit-logs$#' => [AuditLogController::class, 'index'], 
     '#^admin/settings$#' => [SettingsController::class, 'index'], 
     '#^admin/community-moderation$#' => [AdminCommunityController::class, 'index'],
-    '#^admin/system-health$#' => [SystemHealthController::class, 'index'], // Route von vorhin
+    '#^admin/system-health$#' => [SystemHealthController::class, 'index'], 
 
 
     // --- Planer Bereich ---
@@ -81,6 +83,7 @@ return [
     '#^api/admin/users/update$#' => [UserController::class, 'updateUser'],
     '#^api/admin/users/delete$#' => [UserController::class, 'deleteUser'],
     '#^api/admin/users/import$#' => [UserController::class, 'importUsers'],
+    '#^api/admin/users/impersonate$#' => [UserController::class, 'impersonateUserApi'], // NEU: Impersonation starten
 
     // --- API Routes for Admin ---
     '#^api/admin/audit-logs$#' => [AuditLogController::class, 'getLogsApi'],
@@ -122,8 +125,6 @@ return [
     // --- API Route for User Dashboards ---
     '#^api/dashboard/weekly-data$#' => [DashboardController::class, 'getWeeklyData'],
     '#^api/student/note/save$#' => [DashboardController::class, 'saveNoteApi'],
-    
-    // KORREKTUR: Verweist auf die *existierende* Methode 'getForStudent'
     '#^api/student/events$#' => [AcademicEventController::class, 'getForStudent'], 
 
     // --- API Routes for Teacher Cockpit ---

@@ -1,4 +1,8 @@
 <?php
+// pages/partials/header.php
+// KORRIGIERT: Fehlende IDs (user-menu-btn und user-menu-dropdown) 
+// in Zeile 90 & 94 wieder hinzugefügt, damit das JavaScript-Dropdown funktioniert.
+
 $settings = \App\Core\Utils::getSettings();
 global $config; // Ensure $config is accessible
 
@@ -34,10 +38,7 @@ if ($logoPath) $logoPath .= $cacheBuster;
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=Oswald:wght@700&display=swap" rel="stylesheet">
 
-    <!-- NEU: FullCalendar Skripte (für Abwesenheits-Management) -->
     <script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.14/index.global.min.js'></script>
-    <!-- Ende FullCalendar -->
-
     <script>
         // Immediately set theme before rendering to prevent flash
         (function() {
@@ -60,6 +61,23 @@ if ($logoPath) $logoPath .= $cacheBuster;
     <link rel="stylesheet" href="<?php echo htmlspecialchars(rtrim($config['base_url'], '/')); ?>/assets/css/main.css">
 </head>
 <body class="<?php echo htmlspecialchars($body_class ?? ''); ?> role-<?php echo htmlspecialchars($_SESSION['user_role'] ?? 'guest'); ?>"> <?php /* Added role class to body */ ?>
+    
+    <?php // Impersonation Banner ?>
+    <?php if (isset($_SESSION['impersonator_id'])): ?>
+        <div class="impersonation-banner">
+            <div class="page-wrapper" style="display: flex; justify-content: space-between; align-items: center; padding: 12px 20px;">
+                <span>
+                    <strong>Achtung:</strong> Sie sind angemeldet als 
+                    <strong><?php echo htmlspecialchars($_SESSION['username'] ?? 'Benutzer'); ?></strong> 
+                    (Rolle: <?php echo htmlspecialchars($_SESSION['user_role'] ?? 'N/A'); ?>).
+                </span>
+                <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('logout/revert')); ?>" class="btn btn-secondary btn-small" style="width: auto; margin-bottom: 0;">
+                    Zurück zum Admin-Konto
+                </a>
+            </div>
+        </div>
+    <?php endif; ?>
+
     <header class="page-header">
         <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('/')); ?>" class="site-logo">
             <?php // NEU: Logo-Logik ?>
@@ -80,11 +98,13 @@ if ($logoPath) $logoPath .= $cacheBuster;
                     $userRole = $_SESSION['user_role'] ?? '';
                 ?>
                     <div class="user-menu">
-                        <button class="user-menu-toggle" aria-haspopup="true" aria-expanded="false">
+                        <?php // KORREKTUR: id="user-menu-btn" hinzugefügt ?>
+                        <button id="user-menu-btn" class="user-menu-toggle" aria-haspopup="true" aria-expanded="false">
                             <span>Hallo, <?php echo htmlspecialchars($_SESSION['username']); ?></span>
                             <svg class="chevron-down" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
                         </button>
-                        <div class="user-menu-dropdown">
+                        <?php // KORREKTUR: id="user-menu-dropdown" hinzugefügt ?>
+                        <div id="user-menu-dropdown" class="user-menu-dropdown">
                             <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('dashboard')); ?>">Mein Dashboard</a>
 
                             <?php if ($userRole === 'admin'): ?>

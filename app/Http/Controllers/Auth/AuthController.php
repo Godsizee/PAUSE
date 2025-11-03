@@ -1,5 +1,10 @@
 <?php
 // app/Http/Controllers/Auth/AuthController.php
+// MODIFIZIERT:
+// 1. UserRepository und AuditLogger importiert.
+// 2. Konstruktor erweitert, um UserRepository zu initialisieren.
+// 3. Neue Methode revertImpersonation() hinzugefügt.
+
 namespace App\Http\Controllers\Auth;
 
 use App\Core\Database;
@@ -7,16 +12,20 @@ use App\Core\Utils;
 use App\Core\Security; // Use statement
 use App\Repositories\UserRepository;
 use App\Services\AuthenticationService;
+use App\Services\AuditLogger; // NEU
 use Exception;
 use PDO;
 
 class AuthController
 {
     private PDO $pdo;
+    private UserRepository $userRepository; // NEU
+    // private AuthenticationService $authService; // Wird nur in handleLogin benötigt
 
     public function __construct()
     {
         $this->pdo = Database::getInstance();
+        $this->userRepository = new UserRepository($this->pdo); // NEU
     }
 
     /**
@@ -43,10 +52,10 @@ class AuthController
 
         try {
             // Erstelle die notwendigen Objekte.
-            $userRepository = new UserRepository($this->pdo);
+            // $userRepository = new UserRepository($this->pdo); // Bereits im Konstruktor
             // Assuming LoginAttemptRepository is needed by AuthenticationService
             $loginAttemptRepository = new \App\Repositories\LoginAttemptRepository($this->pdo);
-            $authService = new AuthenticationService($userRepository, $loginAttemptRepository);
+            $authService = new AuthenticationService($this->userRepository, $loginAttemptRepository);
 
             // Führe den Login-Versuch durch.
             $userData = $authService->login($identifier, $password);
@@ -97,5 +106,62 @@ class AuthController
         header("Location: " . Utils::url('login'));
         exit();
     }
-}
+    
+    /**
+     * NEU: Beendet die Impersonation und stellt die Admin-Sitzung wieder her.
+     */
+    public function revertImpersonation()
+    {
+        // 1. Prüfen, ob wir überhaupt in einer Impersonation-Sitzung sind
+        if (session_status() !== PHP_SESSION_ACTIVE || empty($_SESSION['impersonator_id'])) {
+            // Falls nicht, einfach normal ausloggen
+            $this->logout();
+            return;
+        }
 
+        $impersonatedUserId = $_SESSION['user_id'] ?? 0;
+        $adminUserId = $_SESSION['impersonator_id'];
+
+        // 2. Aktuelle (impersonierte) Sitzung zerstören
+        $_SESSION = [];
+        session_destroy();
+        
+        // 3. Neue, saubere Session für den Admin starten
+        session_start(); 
+        session_regenerate_id(true);
+
+        try {
+            // 4. Admin-Benutzerdaten holen
+            $adminUser = $this->userRepository->findById($adminUserId);
+            if (!$adminUser || $adminUser['role'] !== 'admin') {
+                throw new Exception("Ursprünglicher Benutzer ist kein Admin.");
+            }
+
+            // 5. Admin-Session manuell aufbauen (genau wie in handleLogin)
+            $_SESSION['user_id'] = $adminUser['user_id'];
+            $_SESSION['username'] = $adminUser['username'];
+            $_SESSION['user_role'] = $adminUser['role'];
+            // (Die 'impersonator_id' ist nicht mehr vorhanden, da die Session neu ist)
+            
+            // 6. CSRF-Token für die neue Admin-Session setzen
+            Security::getCsrfToken();
+
+            // 7. Aktion protokollieren
+            AuditLogger::log(
+                'impersonate_revert',
+                'user',
+                $adminUserId, // Der Admin, der die Aktion ausführt
+                ['reverted_from_user_id' => $impersonatedUserId]
+            );
+
+            // 8. Zurück zur Benutzerliste im Admin-Panel
+            header("Location: " . Utils::url('admin/users'));
+            exit();
+
+        } catch (Exception $e) {
+            // Im schlimmsten Fall (Admin-Konto existiert nicht mehr?), sicher ausloggen
+            error_log("Fehler bei revertImpersonation: " . $e->getMessage());
+            $this->logout(); // Führt zu einer sauberen Logout-Weiterleitung
+        }
+    }
+}
