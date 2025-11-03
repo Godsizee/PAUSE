@@ -1,5 +1,8 @@
 <?php
 // pages/dashboard.php
+// KORRIGIERT: Alle Referenzen zum "Schwarzen Brett" (Tabs UND Inhalt)
+// wurden aus dem 'lehrer'-Block entfernt.
+
 include_once __DIR__ . '/partials/header.php';
 // $today, $dayOfWeekName, $dateFormatted, $icalSubscriptionUrl werden vom Controller übergeben
 // $settings wird automatisch vom header.php geladen
@@ -28,10 +31,9 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
             <button class="tab-button" data-target="section-events">📚 Aufgaben/Klausuren</button>
             <button class="tab-button" data-target="section-office-hours">🗣️ Sprechzeiten</button>
             <button class="tab-button" data-target="section-colleague-search">🧑‍🤝‍🧑 Kollegensuche</button>
-            <?php // Lehrer können Community Board sehen (falls aktiviert), aber nicht "Deine Beiträge" ?>
-            <?php if ($settings['community_board_enabled']): ?>
-                <button class="tab-button" data-target="section-community-board">📰 Schwarzes Brett</button>
-            <?php endif; ?>
+            
+            <?php // KORREKTUR: Der 'Schwarzes Brett'-Tab für Lehrer wurde hier entfernt (war Zeile 26-28). ?>
+            
         <?php endif; ?>
     </nav>
 
@@ -265,34 +267,7 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                     </div>
                 </div>
                 
-                <?php if ($settings['community_board_enabled']): ?>
-                <div class="dashboard-section" id="section-community-board">
-                    <h4>Digitales Schwarzes Brett</h4>
-                    <p class="form-hint" style="margin-bottom: 20px;">Informeller Feed für Fundsachen, AGs, Nachhilfe, etc.</p>
-
-                    <form id="community-post-form" class="form-container" style="background-color: var(--color-surface-alt); padding: 15px; margin-bottom: 25px;">
-                        <?php \App\Core\Security::csrfInput(); ?>
-                        <h5>Neuen Beitrag erstellen</h5>
-                        <div class="form-group" style="margin-bottom: 10px;">
-                            <label for="post-title">Titel*</label>
-                            <input type="text" id="post-title" name="title" required placeholder="z.B. Nachhilfe in Mathe gesucht">
-                        </div>
-                        <div class="form-group" style="margin-bottom: 15px;">
-                            <label for="post-content">Inhalt*</label>
-                            <textarea id="post-content" name="content" rows="4" required placeholder="Beschreibe dein Anliegen..."></textarea>
-                            <small class="form-hint">Sie können <a href="https://www.markdownguide.org/basic-syntax/" target="_blank">Markdown</a> für die Formatierung verwenden.</small>
-                        </div>
-                        <div class="form-actions" style="margin-top: 0; justify-content: flex-end;">
-                            <button type="submit" class="btn btn-primary btn-small" id="create-post-btn" style="width: auto;">Beitrag veröffentlichen</button>
-                            <span id="post-create-spinner" class="loading-spinner small" style="display: none; margin-left: 10px;"></span>
-                        </div>
-                    </form>
-
-                    <div id="community-posts-list" class="posts-list-container" style="max-height: 60vh; overflow-y: auto;">
-                        <div class="loading-spinner"></div>
-                    </div>
-                </div>
-                <?php endif; ?>
+                <?php // KORREKTUR: Der 'Schwarzes Brett'-INHALT für Lehrer wurde hier entfernt (war Zeile 247-279). ?>
                 
             </div> <?php // End #teacher-cockpit ?>
         <?php endif; ?>
