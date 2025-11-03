@@ -69,8 +69,28 @@ try {
     // Fängt den Fehler ab, wenn die DB-Verbindung fehlschlägt
     // Zeigt eine benutzerfreundliche Fehlerseite an
     http_response_code(503); // Service Unavailable
-    // Fetteres Error-Handling wäre besser (eigene Fehlerseite laden)
-    die("Fehler: Die Datenbankverbindung konnte nicht hergestellt werden. Bitte überprüfen Sie die Konfiguration oder versuchen Sie es später erneut.");
+
+    // Logge den eigentlichen Fehler für den Admin, damit er im Server-Log erscheint
+    error_log("Schwerwiegender DB-Fehler in init.php: " . $e->getMessage());
+
+    // Definiere die Nachricht für die 503-Seite.
+    // Die Seite pages/errors/503.php (Wartungsseite) wird hier wiederverwendet
+    // und erwartet die Variable $maintenance_message.
+    
+    // KORRIGIERT: \n statt <br> verwenden, damit nl2br() im Template funktioniert
+    $maintenance_message = "Fehler: Die Datenbankverbindung konnte nicht hergestellt werden. \nBitte versuchen Sie es zu einem späteren Zeitpunkt erneut.";
+
+    // Da dieser Fehler vor dem Router auftritt, müssen wir das Template manuell laden.
+    // $config sollte global verfügbar sein (von getConfig()), was für den Header benötigt wird.
+    // Der Autoloader ist ebenfalls bereits aktiv.
+    
+    require_once __DIR__ . '/pages/partials/header.php';
+    require_once __DIR__ . '/pages/errors/503.php';
+    require_once __DIR__ . '/pages/partials/footer.php';
+    
+    // Beende die Ausführung, nachdem die Seite gerendert wurde
+    exit;
+    
 } catch (Exception $e) { // Fange generische Exceptions beim Laden ab
     http_response_code(500);
     die("Ein kritischer Initialisierungsfehler ist aufgetreten: " . $e->getMessage());
