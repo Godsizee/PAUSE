@@ -284,7 +284,26 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         <span id="save-settings-spinner" class="loading-spinner small" style="display: none; margin-left: 15px;"></span>
                     </div>
                 </form>
-            </div>
+                
+                <div class="form-container settings-section" style="margin-top: 30px;">
+                    <h3>System-Wartung</h3>
+                    
+                    <div class="setting-row">
+                        <div class="setting-info">
+                            <label>Anwendungs-Cache</label>
+                            <p>Löscht alle zwischengespeicherten Daten (z.B. Stundenpläne, Einstellungen). Dies kann helfen, Anzeigefehler nach Änderungen zu beheben.</p>
+                        </div>
+                        <div class="setting-control cache-control-section" style="flex-direction: column; align-items: flex-start;">
+                            <input type="hidden" id="cache_csrf_token" value="<?php echo htmlspecialchars(\App\Core\Security::getCsrfToken()); ?>">
+                            
+                            <button type="button" id="clear-cache-btn" class="btn btn-secondary" style="width: auto; margin-bottom: 0;">
+                                Cache jetzt leeren
+                            </button>
+                            <small id="cache-clear-status" class="form-text" style="margin-top: 10px; display: block;"></small>
+                        </div>
+                    </div>
+                </div>
+                </div>
         </main>
     </div>
 </div>

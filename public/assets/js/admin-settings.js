@@ -11,8 +11,11 @@ export function initializeAdminSettings() {
     // Toggle-Schalter
     const maintenanceToggle = document.getElementById('maintenance_mode');
     const maintenanceStatus = document.getElementById('maintenance-status');
-    const icalToggle = document.getElementById('ical_enabled'); // NEU
-    const icalStatus = document.getElementById('ical-status'); // NEU
+    const icalToggle = document.getElementById('ical_enabled');
+    const icalStatus = document.getElementById('ical-status');
+    // NEU: Community Board Toggle
+    const communityToggle = document.getElementById('community_board_enabled');
+    const communityStatus = document.getElementById('community-board-status');
     
     // Datei-Upload-Vorschau-Handler
     const logoInput = document.getElementById('site_logo');
@@ -21,6 +24,11 @@ export function initializeAdminSettings() {
     const faviconInput = document.getElementById('site_favicon');
     const faviconPreviewContainer = document.getElementById('favicon-preview-container');
     const faviconRemoveCheckbox = document.querySelector('input[name="remove_site_favicon"]');
+
+    // NEU: Cache-Management-Elemente
+    const clearCacheBtn = document.getElementById('clear-cache-btn');
+    const cacheStatusText = document.getElementById('cache-clear-status');
+    const cacheCsrfTokenInput = document.getElementById('cache_csrf_token');
 
 
     // NEU: Hilfsfunktion für Toggles
@@ -43,7 +51,8 @@ export function initializeAdminSettings() {
 
     // Live-Aktualisierung der Status-Texte
     setupToggle(maintenanceToggle, maintenanceStatus, 'Aktiviert', 'Deaktiviert');
-    setupToggle(icalToggle, icalStatus, 'Aktiviert', 'Deaktiviert'); // NEU
+    setupToggle(icalToggle, icalStatus, 'Aktiviert', 'Deaktiviert');
+    setupToggle(communityToggle, communityStatus, 'Aktiviert', 'Deaktiviert'); // NEU
 
 
     // Funktion zur Aktualisierung der Datei-Vorschau
@@ -95,6 +104,51 @@ export function initializeAdminSettings() {
      if (faviconRemoveCheckbox) {
         faviconRemoveCheckbox.addEventListener('change', () => handleRemoveCheck(faviconRemoveCheckbox, faviconInput, faviconPreviewContainer, 'Favicon'));
     }
+
+    // ====== NEUER EVENT LISTENER FÜR CACHE-LÖSCHUNG ======
+    if (clearCacheBtn && cacheStatusText && cacheCsrfTokenInput) {
+        clearCacheBtn.addEventListener('click', async () => {
+            if (confirm('Sind Sie sicher, dass Sie den gesamten Anwendungs-Cache leeren möchten?')) {
+                
+                clearCacheBtn.disabled = true;
+                clearCacheBtn.textContent = 'Leere...';
+                cacheStatusText.textContent = '';
+                cacheStatusText.classList.remove('text-success', 'text-danger');
+    
+                // Wir erstellen FormData, um konsistent mit dem apiFetch-Aufruf
+                // des Hauptformulars zu sein.
+                const formData = new FormData();
+                formData.append('csrf_token', cacheCsrfTokenInput.value);
+    
+                try {
+                    const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/admin/cache/clear`, {
+                        method: 'POST',
+                        body: formData
+                    });
+    
+                    if (response.success) {
+                        showToast(response.message || 'Cache erfolgreich geleert.', 'success');
+                        cacheStatusText.textContent = response.message;
+                        cacheStatusText.classList.add('text-success');
+                    } else {
+                        // apiFetch sollte bei HTTP-Fehlern werfen, aber fangen wir auch 'success: false' ab
+                        throw new Error(response.message || 'Ein unbekannter Fehler ist aufgetreten.');
+                    }
+    
+                } catch (error) {
+                    console.error('Fehler beim Leeren des Caches:', error);
+                    const errorMessage = error.message || 'Fehler beim Leeren des Caches.';
+                    showToast(errorMessage, 'error');
+                    cacheStatusText.textContent = `Fehler: ${errorMessage}`;
+                    cacheStatusText.classList.add('text-danger');
+                } finally {
+                    clearCacheBtn.disabled = false;
+                    clearCacheBtn.textContent = 'Cache jetzt leeren';
+                }
+            }
+        });
+    }
+    // ====== ENDE CACHE-LOGIK ======
 
 
     settingsForm.addEventListener('submit', async (e) => {
@@ -165,6 +219,7 @@ export function initializeAdminSettings() {
                  window.APP_CONFIG.settings.ical_enabled = formData.get('ical_enabled') === '1';
                  window.APP_CONFIG.settings.ical_weeks_future = parseInt(formData.get('ical_weeks_future'), 10);
                  window.APP_CONFIG.settings.maintenance_whitelist_ips = formData.get('maintenance_whitelist_ips'); // NEU
+                 window.APP_CONFIG.settings.community_board_enabled = formData.get('community_board_enabled') === '1'; // NEU
             }
              // Errors are handled by apiFetch and showToast
         } catch (error) {
