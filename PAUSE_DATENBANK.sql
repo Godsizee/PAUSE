@@ -374,6 +374,8 @@ INSERT INTO `settings` (setting_key, setting_value)
 VALUES ('community_board_enabled', '1')
 ON DUPLICATE KEY UPDATE setting_value = setting_value;
 
+
+
 -- ### SEED DATA ###
 
 -- 1. Lehrer anlegen (Fortsetzung)
