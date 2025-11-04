@@ -91,7 +91,7 @@ class PdfController extends \tFPDF
             // Fetch data (only if published)
             $targetGroup = ($userRole === 'schueler') ? 'student' : 'teacher';
             if (!$this->planRepository->isWeekPublishedFor($targetGroup, $year, $week)) {
-                 throw new Exception("Der Stundenplan für diese Woche ist noch nicht veröffentlicht.", 403);
+                throw new Exception("Der Stundenplan für diese Woche ist noch nicht veröffentlicht.", 403);
             }
 
             if ($userRole === 'schueler' && !empty($this->userData['class_id'])) {
@@ -103,7 +103,7 @@ class PdfController extends \tFPDF
                 $this->timetableData = $this->planRepository->getPublishedTimetableForTeacher($teacherId, $year, $week);
                 $this->substitutionData = $this->planRepository->getPublishedSubstitutionsForTeacherWeek($teacherId, $year, $week);
             } else {
-                 throw new Exception("Benutzerdaten unvollständig (Klasse/Lehrer fehlt).", 400);
+                throw new Exception("Benutzerdaten unvollständig (Klasse/Lehrer fehlt).", 400);
             }
 
             // --- Start PDF Generation ---
@@ -113,9 +113,9 @@ class PdfController extends \tFPDF
             try {
                 // ** KORRIGIERT: Verwende .ttf Dateinamen und 'true' für Unicode **
                 // tFPDF sucht diese (mit $uni=true) automatisch im FPDF_FONTPATH . "unifont/" Verzeichnis
-                 if (!file_exists(FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR . 'Oswald-Regular.ttf')) throw new Exception("Font file not found: Oswald-Regular.ttf in " . FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR);
-                 if (!file_exists(FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR . 'Oswald-Bold.ttf')) throw new Exception("Font file not found: Oswald-Bold.ttf in " . FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR);
-                 
+                if (!file_exists(FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR . 'Oswald-Regular.ttf')) throw new Exception("Font file not found: Oswald-Regular.ttf in " . FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR);
+                if (!file_exists(FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR . 'Oswald-Bold.ttf')) throw new Exception("Font file not found: Oswald-Bold.ttf in " . FPDF_FONTPATH . 'unifont' . DIRECTORY_SEPARATOR);
+                
                 $this->AddFont('Oswald', '', 'Oswald-Regular.ttf', true);
                 $this->AddFont('Oswald', 'B', 'Oswald-Bold.ttf', true);
                 
@@ -123,10 +123,10 @@ class PdfController extends \tFPDF
                 $this->fontDisplay = 'Oswald'; // Set class property
 
             } catch (Exception $fontEx) {
-                 // Fallback auf Arial, falls Oswald auch fehlschlägt
-                 error_log("Fehler beim Laden der PDF-Schriftarten: " . $fontEx->getMessage() . " - Fallback auf Arial.");
-                 $this->fontBody = 'Arial'; // Set class property
-                 $this->fontDisplay = 'Arial'; // Set class property
+                // Fallback auf Arial, falls Oswald auch fehlschlägt
+                error_log("Fehler beim Laden der PDF-Schriftarten: " . $fontEx->getMessage() . " - Fallback auf Arial.");
+                $this->fontBody = 'Arial'; // Set class property
+                $this->fontDisplay = 'Arial'; // Set class property
             }
             $this->AliasNbPages();
             $this->AddPage();
@@ -163,37 +163,37 @@ class PdfController extends \tFPDF
             $headerPath = $projectRoot . DIRECTORY_SEPARATOR . 'pages' . DIRECTORY_SEPARATOR . 'partials' . DIRECTORY_SEPARATOR . 'header.php';
             $footerPath = $projectRoot . DIRECTORY_SEPARATOR . 'pages' . DIRECTORY_SEPARATOR . 'partials' . DIRECTORY_SEPARATOR . 'footer.php';
 
-             // Prepare config for header/footer partials if they exist
-             global $config; // Make $config available
-             $config = $this->config; // Use the loaded config
-             $page_title = "PDF Fehler"; // Basic title for error page
+            // Prepare config for header/footer partials if they exist
+            global $config; // Make $config available
+            $config = $this->config; // Use the loaded config
+            $page_title = "PDF Fehler"; // Basic title for error page
 
             // Check if header/footer exist before including to prevent further errors
             if (file_exists($headerPath)) {
-                 include_once $headerPath;
+                include_once $headerPath;
             } else {
-                 echo "<!DOCTYPE html><html><head><title>Fehler</title></head><body>"; // Basic fallback HTML
-                 error_log("Error page header not found: " . $headerPath);
+                echo "<!DOCTYPE html><html><head><title>Fehler</title></head><body>"; // Basic fallback HTML
+                error_log("Error page header not found: " . $headerPath);
             }
 
             echo '<div class="container message error" style="margin-top: 50px;">';
             echo '<h1>PDF Generierungsfehler</h1>';
             // Avoid showing potentially sensitive details from font loading errors directly
-             $errorMessage = htmlspecialchars($e->getMessage());
-             if (str_contains($e->getMessage(), 'Could not include font definition file') || str_contains($e->getMessage(), 'Font file not found')) {
-                 $errorMessage = 'Ein Fehler ist beim Laden der Schriftarten für das PDF aufgetreten (' . $errorMessage . '). Stellen Sie sicher, dass die .ttf-Dateien (und ggf. generierte .php/.z-Dateien) im korrekten Verzeichnis (`libs/tfpdf/font/unifont/`) liegen und lesbar sind. Kontaktieren Sie ggf. den Administrator.';
-                 error_log("PDF Generation Font Error: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString()); // Log original error
-             }
-             echo '<p>' . $errorMessage . '</p>';
+            $errorMessage = htmlspecialchars($e->getMessage());
+            if (str_contains($e->getMessage(), 'Could not include font definition file') || str_contains($e->getMessage(), 'Font file not found')) {
+                $errorMessage = 'Ein Fehler ist beim Laden der Schriftarten für das PDF aufgetreten (' . $errorMessage . '). Stellen Sie sicher, dass die .ttf-Dateien (und ggf. generierte .php/.z-Dateien) im korrekten Verzeichnis (`libs/tfpdf/font/unifont/`) liegen und lesbar sind. Kontaktieren Sie ggf. den Administrator.';
+                error_log("PDF Generation Font Error: " . $e->getMessage() . " | Trace: " . $e->getTraceAsString()); // Log original error
+            }
+            echo '<p>' . $errorMessage . '</p>';
 
             echo '<p><a href="' . Utils::url('dashboard') . '" class="btn btn-primary">Zurück zum Dashboard</a></p>';
             echo '</div>';
 
             if (file_exists($footerPath)) {
-                 include_once $footerPath;
+                include_once $footerPath;
             } else {
-                 echo "</body></html>";
-                 error_log("Error page footer not found: " . $footerPath);
+                echo "</body></html>";
+                error_log("Error page footer not found: " . $footerPath);
             }
             exit;
         }
@@ -211,10 +211,10 @@ class PdfController extends \tFPDF
 
         $className = '';
         if($_SESSION['user_role'] === 'schueler') {
-             $classData = $this->userRepository->findClassByUserId($this->userData['user_id']);
-             if ($classData) {
-                 $className = 'Klasse ' . ($classData['class_name'] ?? $classData['class_id']);
-             }
+            $classData = $this->userRepository->findClassByUserId($this->userData['user_id']);
+            if ($classData) {
+                $className = 'Klasse ' . ($classData['class_name'] ?? $classData['class_id']);
+            }
         }
 
         $title = sprintf(
@@ -232,9 +232,9 @@ class PdfController extends \tFPDF
 
         $this->SetFont($this->fontDisplay, 'B', 16); // Use class property
         $this->SetTextColor(0, 0, 0);
-        $this->Cell(0, 8, $this->utf8($title), 0, 1, 'C'); // Centered title
+        $this->Cell(0, 8, $title, 0, 1, 'C'); // Centered title
         $this->SetFont($this->fontBody, '', 10); // Use class property
-        $this->Cell(0, 6, $this->utf8($subTitle), 0, 1, 'C'); // Centered subtitle
+        $this->Cell(0, 6, $subTitle, 0, 1, 'C'); // Centered subtitle
         $this->Ln(5); // Space after header
 
         return 8 + 6 + 5; // Return calculated height (8 + 6 + 5 = 19)
@@ -258,10 +258,10 @@ class PdfController extends \tFPDF
         $this->SetLineWidth(0.2);
 
         // Header Row 1: Time + Days
-        $this->Cell($this->cellWidths[0], $this->headerHeight, $this->utf8('Zeit'), 1, 0, 'C', true);
+        $this->Cell($this->cellWidths[0], $this->headerHeight, 'Zeit', 1, 0, 'C', true);
         $daysOfWeek = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag'];
         foreach ($daysOfWeek as $i => $day) {
-            $this->Cell($this->cellWidths[$i + 1], $this->headerHeight, $this->utf8($day), 1, 0, 'C', true);
+            $this->Cell($this->cellWidths[$i + 1], $this->headerHeight, $day, 1, 0, 'C', true);
         }
         $this->Ln($this->headerHeight);
 
@@ -271,14 +271,14 @@ class PdfController extends \tFPDF
         $drawableHeight = $this->h - $this->tMargin - 10; // 210 - 10 - 10 = 190 (bei A4 landscape)
         $gridBodyHeight = $drawableHeight - $headerAreaHeight - $this->headerHeight; // 190 - 19 - 7 = 164
         
-         $timeSlotsDisplay = [
-             "08:00\n08:45", "08:55\n09:40", "09:40\n10:25", "10:35\n11:20",
-             "11:20\n12:05", "13:05\n13:50", "13:50\n14:35", "14:45\n15:30",
-             "15:30\n16:15", "16:25\n17:10"
-         ];
-         $numRows = count($timeSlotsDisplay);
-         $calculatedRowHeight = $gridBodyHeight / $numRows; // z.B. 164 / 10 = 16.4mm
-         $timeCellLineHeight = 3.5; // Feste Zeilenhöhe für 3 Zeilen Text (Stunde, Start, Ende)
+        $timeSlotsDisplay = [
+            "08:00\n08:45", "08:55\n09:40", "09:40\n10:25", "10:35\n11:20",
+            "11:20\n12:05", "13:05\n13:50", "13:50\n14:35", "14:45\n15:30",
+            "15:30\n16:15", "16:25\n17:10"
+        ];
+        $numRows = count($timeSlotsDisplay);
+        $calculatedRowHeight = $gridBodyHeight / $numRows; // z.B. 164 / 10 = 16.4mm
+        $timeCellLineHeight = 3.5; // Feste Zeilenhöhe für 3 Zeilen Text (Stunde, Start, Ende)
 
         $timetableByCell = $this->prepareTimetableData();
 
@@ -314,12 +314,12 @@ class PdfController extends \tFPDF
             // 2. Stundennummer (darüber schreiben)
             $this->SetXY(10, $textStartY); // 10 = left margin
             $this->SetFont($this->fontBody, 'B', 8);
-            $this->Cell($this->cellWidths[0], $timeCellLineHeight, $this->utf8($periodLabel), 0, 1, 'C', false); // 0 border, false fill
+            $this->Cell($this->cellWidths[0], $timeCellLineHeight, $periodLabel, 0, 1, 'C', false); // 0 border, false fill
             
             // 3. Zeit (darüber schreiben)
             $this->SetFont($this->fontBody, '', 7); // Kleinere Schrift für Zeit
             $this->SetX(10);
-            $this->Cell($this->cellWidths[0], $timeCellLineHeight, $this->utf8($timeLabelFormatted), 0, 1, 'C', false);
+            $this->Cell($this->cellWidths[0], $timeCellLineHeight, $timeLabelFormatted, 0, 1, 'C', false);
 
 
             // Reset Y position for drawing day cells in the same row
@@ -327,18 +327,18 @@ class PdfController extends \tFPDF
 
             // Draw Day Cells for this period
             for ($dayNum = 1; $dayNum <= 5; $dayNum++) {
-                 // Move X position for each day cell
-                 $currentX = 10 + $this->cellWidths[0] + (($dayNum - 1) * $this->cellWidths[$dayNum]); // Margin + Time Col + Prev Day Cols
-                 $this->SetX($currentX);
+                // Move X position for each day cell
+                $currentX = 10 + $this->cellWidths[0] + (($dayNum - 1) * $this->cellWidths[$dayNum]); // Margin + Time Col + Prev Day Cols
+                $this->SetX($currentX);
 
-                 $cellKey = $dayNum . '-' . $currentPeriod;
-                 $entry = $timetableByCell[$cellKey] ?? null;
+                $cellKey = $dayNum . '-' . $currentPeriod;
+                $entry = $timetableByCell[$cellKey] ?? null;
 
-                 // Draw the cell using calculated max height
-                 $this->drawTimetableCell($entry, $this->cellWidths[$dayNum], $calculatedRowHeight, $this->fontBody, $currentPeriod); // Pass currentPeriod
+                // Draw the cell using calculated max height
+                $this->drawTimetableCell($entry, $this->cellWidths[$dayNum], $calculatedRowHeight, $this->fontBody, $currentPeriod); // Pass currentPeriod
             }
-             // Move to the next line using the calculated max height
-             $this->Ln($calculatedRowHeight);
+            // Move to the next line using the calculated max height
+            $this->Ln($calculatedRowHeight);
         }
     }
 
@@ -346,50 +346,50 @@ class PdfController extends \tFPDF
      * Prepares timetable and substitution data into a lookup map by 'day-period'.
      * @return array Map where key is 'day-period' and value is the entry/substitution data.
      */
-     private function prepareTimetableData(): array
-     {
-         $map = [];
-         $userRole = $_SESSION['user_role'];
+    private function prepareTimetableData(): array
+    {
+        $map = [];
+        $userRole = $_SESSION['user_role'];
 
-         // 1. Add regular entries
-         foreach ($this->timetableData as $entry) {
-             $key = $entry['day_of_week'] . '-' . $entry['period_number'];
-             $map[$key] = [
-                 'type' => 'regular',
-                 'subject' => $entry['subject_shortcut'] ?? '---',
-                 'mainText' => $userRole === 'schueler' ? ($entry['teacher_shortcut'] ?? '---') : ($entry['class_name'] ?? '---'),
-                 'room' => $entry['room_name'] ?? '',
-                 'comment' => $entry['comment'] ?? '',
-                 'original' => $entry // Store original for context
-             ];
-         }
+        // 1. Add regular entries
+        foreach ($this->timetableData as $entry) {
+            $key = $entry['day_of_week'] . '-' . $entry['period_number'];
+            $map[$key] = [
+                'type' => 'regular',
+                'subject' => $entry['subject_shortcut'] ?? '---',
+                'mainText' => $userRole === 'schueler' ? ($entry['teacher_shortcut'] ?? '---') : ($entry['class_name'] ?? '---'),
+                'room' => $entry['room_name'] ?? '',
+                'comment' => $entry['comment'] ?? '',
+                'original' => $entry // Store original for context
+            ];
+        }
 
-         // 2. Add substitutions, potentially overwriting regular entries
-         foreach ($this->substitutionData as $sub) {
-             // Calculate day_of_week (1=Mon, 5=Fri) using PHP DateTime
-             try {
-                 $subDate = new DateTime($sub['date']);
-                 $dayNum = $subDate->format('N'); // ISO-8601 day of week (1 = Monday, 7 = Sunday)
-             } catch (Exception $e) { continue; } // Skip if date is invalid
+        // 2. Add substitutions, potentially overwriting regular entries
+        foreach ($this->substitutionData as $sub) {
+            // Calculate day_of_week (1=Mon, 5=Fri) using PHP DateTime
+            try {
+                $subDate = new DateTime($sub['date']);
+                $dayNum = $subDate->format('N'); // ISO-8601 day of week (1 = Monday, 7 = Sunday)
+            } catch (Exception $e) { continue; } // Skip if date is invalid
 
-             if ($dayNum < 1 || $dayNum > 5) continue; // Skip weekends
+            if ($dayNum < 1 || $dayNum > 5) continue; // Skip weekends
 
-             $key = $dayNum . '-' . $sub['period_number'];
-             $regularEntryForKey = $map[$key]['original'] ?? null; // Get original entry if it exists
+            $key = $dayNum . '-' . $sub['period_number'];
+            $regularEntryForKey = $map[$key]['original'] ?? null; // Get original entry if it exists
 
-             $map[$key] = [
-                 'type' => $sub['substitution_type'],
-                 'subject' => $sub['new_subject_shortcut'] ?? $regularEntryForKey['subject_shortcut'] ?? ($sub['substitution_type'] === 'Sonderevent' ? 'EVENT' : ($sub['substitution_type'] === 'Entfall' ? ($regularEntryForKey['subject_shortcut'] ?? '---') : '---')),
-                 'mainText' => $sub['substitution_type'] === 'Vertretung'
-                     ? ($userRole === 'teacher' ? ($sub['class_name'] ?? $regularEntryForKey['class_name'] ?? '---') : ($sub['new_teacher_shortcut'] ?? '---'))
-                     : ($sub['substitution_type'] === 'Entfall' ? 'Entfällt' : ($regularEntryForKey ? ($userRole === 'schueler' ? $regularEntryForKey['teacher_shortcut'] : $regularEntryForKey['class_name']) : '')),
-                 'room' => $sub['new_room_name'] ?? $regularEntryForKey['room_name'] ?? '',
-                 'comment' => $sub['comment'] ?? '',
-                 'original' => $regularEntryForKey // Keep original entry context if available
-             ];
-         }
-         return $map;
-     }
+            $map[$key] = [
+                'type' => $sub['substitution_type'],
+                'subject' => $sub['new_subject_shortcut'] ?? $regularEntryForKey['subject_shortcut'] ?? ($sub['substitution_type'] === 'Sonderevent' ? 'EVENT' : ($sub['substitution_type'] === 'Entfall' ? ($regularEntryForKey['subject_shortcut'] ?? '---') : '---')),
+                'mainText' => $sub['substitution_type'] === 'Vertretung'
+                    ? ($userRole === 'teacher' ? ($sub['class_name'] ?? $regularEntryForKey['class_name'] ?? '---') : ($sub['new_teacher_shortcut'] ?? '---'))
+                    : ($sub['substitution_type'] === 'Entfall' ? 'Entfällt' : ($regularEntryForKey ? ($userRole === 'schueler' ? $regularEntryForKey['teacher_shortcut'] : $regularEntryForKey['class_name']) : '')),
+                'room' => $sub['new_room_name'] ?? $regularEntryForKey['room_name'] ?? '',
+                'comment' => $sub['comment'] ?? '',
+                'original' => $regularEntryForKey // Keep original entry context if available
+            ];
+        }
+        return $map;
+    }
 
     /**
      * Draws a single cell in the timetable grid.
@@ -414,10 +414,10 @@ class PdfController extends \tFPDF
         $borderColor = null;
 
         if ($entry) {
-            $subjectText = $this->utf8($entry['subject'] ?? '');
-            $mainText = $this->utf8($entry['mainText'] ?? '');
-            $roomText = $this->utf8($entry['room'] ?? '');
-            $commentText = $this->utf8($entry['comment'] ?? '');
+            $subjectText = $entry['subject'] ?? '';
+            $mainText = $entry['mainText'] ?? '';
+            $roomText = $entry['room'] ?? '';
+            $commentText = $entry['comment'] ?? '';
 
             // Determine border color for substitutions
             switch ($entry['type']) {
@@ -458,9 +458,9 @@ class PdfController extends \tFPDF
             if ($commentText && $entry['type'] !== 'Sonderevent') {
                 $textBlockHeight += $lineHeight; // Annahme: Kommentar passt auf eine Zeile (oder MultiCell Höhe)
             }
-             // Für Sonderevent (Fach + Kommentar als MainText)
+            // Für Sonderevent (Fach + Kommentar als MainText)
             if ($entry['type'] === 'Sonderevent') {
-                 $textBlockHeight = $lineHeight * 2; // Annahme: 2 Zeilen
+                $textBlockHeight = $lineHeight * 2; // Annahme: 2 Zeilen
             }
 
 
@@ -472,55 +472,47 @@ class PdfController extends \tFPDF
 
             // Subject
             $this->SetFont($fontBody, 'B', 9); // Größere Schrift
-             if ($entry['type'] === 'Entfall') {
-                 $this->SetTextColor(...$this->colors['substTextEntfall']);
-                 $this->Cell($availableWidth, $lineHeight, $this->utf8('Entfällt: ') . $subjectText, 0, 1, 'C');
-             } else {
-                  $this->SetTextColor(...$this->colors['cellText']);
-                  $this->Cell($availableWidth, $lineHeight, $subjectText, 0, 1, 'C');
-             }
+            if ($entry['type'] === 'Entfall') {
+                $this->SetTextColor(...$this->colors['substTextEntfall']);
+                $this->Cell($availableWidth, $lineHeight, 'Entfällt: ' . $subjectText, 0, 1, 'C');
+            } else {
+                $this->SetTextColor(...$this->colors['cellText']);
+                $this->Cell($availableWidth, $lineHeight, $subjectText, 0, 1, 'C');
+            }
 
             // Main Text & Room (if not Entfall)
             if ($entry['type'] !== 'Entfall') {
                 $this->SetFont($fontBody, '', 8); // Größere Schrift
                 $this->SetTextColor(...$this->colors['cellText']);
                 $detailsText = trim(($mainText ? $mainText : '') . ($roomText ? ' (' . $roomText . ')' : ''));
-                 if ($detailsText) {
-                     $this->SetX($startX + $padding); // Reset X
-                     $this->Cell($availableWidth, $lineHeight, $detailsText, 0, 1, 'C');
-                 }
+                if ($detailsText) {
+                    $this->SetX($startX + $padding); // Reset X
+                    $this->Cell($availableWidth, $lineHeight, $detailsText, 0, 1, 'C');
+                }
             }
 
-             // Comment
-             if ($commentText && $entry['type'] !== 'Sonderevent') {
-                 $this->SetFont($fontBody, '', 7); // Größere Schrift
-                 $this->SetTextColor(...$this->colors['commentText']);
-                 $this->SetX($startX + $padding); // Reset X
-                 // Verwende Cell statt MultiCell, um Zeilenumbruch zu verhindern (besseres Layout bei fester Höhe)
-                 $this->Cell($availableWidth, $lineHeight, $commentText, 0, 1, 'C');
-             }
+            // Comment
+            if ($commentText && $entry['type'] !== 'Sonderevent') {
+                $this->SetFont($fontBody, '', 7); // Größere Schrift
+                $this->SetTextColor(...$this->colors['commentText']);
+                $this->SetX($startX + $padding); // Reset X
+                // Verwende Cell statt MultiCell, um Zeilenumbruch zu verhindern (besseres Layout bei fester Höhe)
+                $this->Cell($availableWidth, $lineHeight, $commentText, 0, 1, 'C');
+            }
 
         } else {
             // Empty cell or FU
-             // ** KORRIGIERT: Verwende die übergebene $currentPeriod **
-             $isFU = ($currentPeriod == $this->settings['default_start_hour'] || $currentPeriod == $this->settings['default_end_hour']); // Verwende Einstellungen
-
-            if ($isFU && ($currentPeriod == 1 || $currentPeriod == 10)) { // Fallback, falls Einstellungen nicht geladen (sollte nicht passieren)
-                 $isFU = true;
-            } else if ($isFU) {
-                 // Verwende die Werte aus den Einstellungen
-                 $isFU = ($currentPeriod == $this->settings['default_start_hour'] || $currentPeriod == $this->settings['default_end_hour']);
-            }
-
+            // ** KORRIGIERT: Verwende die übergebene $currentPeriod **
+            $isFU = ($currentPeriod == ($this->settings['default_start_hour'] ?? 1) || $currentPeriod == ($this->settings['default_end_hour'] ?? 10)); // Verwende Einstellungen mit Fallback
 
             if ($isFU) {
-                 $this->SetFillColor(...$this->colors['headerBg']); // Lighter background for FU
-                 $this->SetTextColor(...$this->colors['headerText']);
-                 $this->SetFont($fontBody, 'B', 8); // Größer
-                 $this->Cell($width, $height, $this->utf8('FU'), $border, 0, 'C', true);
+                $this->SetFillColor(...$this->colors['headerBg']); // Lighter background for FU
+                $this->SetTextColor(...$this->colors['headerText']);
+                $this->SetFont($fontBody, 'B', 8); // Größer
+                $this->Cell($width, $height, 'FU', $border, 0, 'C', true);
             } else {
-                 // Completely empty cell
-                 $this->Cell($width, $height, '', $border, 0, 'C', true);
+                // Completely empty cell
+                $this->Cell($width, $height, '', $border, 0, 'C', true);
             }
 
         }
@@ -529,80 +521,37 @@ class PdfController extends \tFPDF
     }
 
     /**
-     * Converts a UTF-8 string. Prefers mb_convert_encoding, falls back to iconv, then utf8_decode.
+     * Gets the date of the Monday of a given calendar week and year.
+     * @param int $week - The calendar week.
+     * @param int $year - The year.
+     * @return DateTime The Date object for Monday (local time).
      */
-    private function utf8($str) {
-        if (!is_string($str)) {
-             return $str; // Return non-strings as is
-        }
-        // If the string is already ISO-8859-1 or ASCII, no conversion needed
-        if (mb_check_encoding($str, 'ISO-8859-1') || mb_check_encoding($str, 'ASCII')) {
-             return $str;
-        }
-
-        if (function_exists('mb_convert_encoding')) {
-            // Try ISO-8859-1 first, then CP1252 as a common Windows fallback
-            $converted = @mb_convert_encoding($str, 'ISO-8859-1', 'UTF-8');
-            // Check if conversion resulted in loss of characters (heuristic)
-             if ($converted !== false && mb_strlen($str, 'UTF-8') === mb_strlen($converted, 'ISO-8859-1')) {
-                 return $converted;
-             }
-             // Try CP1252 if ISO failed for some characters
-             $converted_cp = @mb_convert_encoding($str, 'CP1252', 'UTF-8');
-              if ($converted_cp !== false && mb_strlen($str, 'UTF-8') === mb_strlen($converted_cp, 'CP1252')) {
-                  return $converted_cp;
-              }
-
-        }
-        if (function_exists('iconv')) {
-            // Use //TRANSLIT or //IGNORE - TRANSLIT might be better for accents
-            $converted = @iconv('UTF-8', 'ISO-8859-1//TRANSLIT', $str);
-            if ($converted !== false) {
-                 return $converted;
-            }
-             $converted_cp = @iconv('UTF-8', 'CP1252//TRANSLIT', $str);
-              if ($converted_cp !== false) {
-                  return $converted_cp;
-              }
-
-        }
-        // Final fallback
-        return utf8_decode($str);
+    private function getDateOfISOWeek(int $week, int $year): DateTime {
+        $dto = new DateTime();
+        $dto->setISODate($year, $week, 1); // Set to Monday of the week
+        $dto->setTime(0,0,0); // Set time to midnight
+        return $dto;
     }
 
-
-     /**
-      * Gets the date of the Monday of a given calendar week and year.
-      * @param int $week - The calendar week.
-      * @param int $year - The year.
-      * @return DateTime The Date object for Monday (local time).
-      */
-     private function getDateOfISOWeek(int $week, int $year): DateTime {
-          $dto = new DateTime();
-          $dto->setISODate($year, $week, 1); // Set to Monday of the week
-          $dto->setTime(0,0,0); // Set time to midnight
-          return $dto;
-     }
-
     // --- Override Header/Footer if needed ---
-     // public function Header() { /* ... */ }
-     public function Footer()
-     {
-         // Position at 1 cm from bottom
-         $this->SetY(-10);
-         // KORRIGIERT: Verwende die Klassen-Eigenschaft $this->fontBody
-         $this->SetFont($this->fontBody,'',8);
-         $this->SetTextColor(128); // Graue Schrift
+    // public function Header() { /* ... */ }
+    public function Footer()
+    {
+        // Position at 1 cm from bottom
+        $this->SetY(-10);
+        // KORRIGIERT: Verwende die Klassen-Eigenschaft $this->fontBody
+        $this->SetFont($this->fontBody,'',8);
+        $this->SetTextColor(128); // Graue Schrift
 
-         // NEU: Benutzerdefinierter Footer-Text aus Einstellungen
-         $footerText = $this->settings['pdf_footer_text'] ?? 'PAUSE Portal';
-         // Füge Generierungsdatum hinzu
-         $footerText .= ' | Generiert am: ' . date('d.m.Y H:i');
-         
-         $this->Cell(0, 10, $this->utf8($footerText), 0, 0, 'L'); // Linksbündig
+        // NEU: Benutzerdefinierter Footer-Text aus Einstellungen
+        $footerText = $this->settings['pdf_footer_text'] ?? 'PAUSE Portal';
+        // Füge Generierungsdatum hinzu
+        $footerText .= ' | Generiert am: ' . date('d.m.Y H:i');
+        
+        $this->Cell(0, 10, $footerText, 0, 0, 'L'); // Linksbündig
 
-         // Page number
-         // $this->Cell(0,10,$this->utf8('Seite ').$this->PageNo().'/{nb}',0,0,'C'); // Zentriert
-         $this->Cell(0, 10, $this->utf8('Seite ').$this->PageNo().'/{nb}', 0, 0, 'R'); // Rechtsbündig
-     }
+        // Page number
+        // $this->Cell(0,10,'Seite '.$this->PageNo().'/{nb}',0,0,'C'); // Zentriert
+        $this->Cell(0, 10, 'Seite '.$this->PageNo().'/{nb}', 0, 0, 'R'); // Rechtsbündig
+    }
 }

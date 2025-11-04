@@ -13,7 +13,7 @@ $desc=array (
 );
 $up=-100;
 $ut=50;
-$ttffile='C:\xampp\htdocs\files\Theater\src\lib\tfpdf/font/unifont/Oswald-Regular.ttf';
+$ttffile=__DIR__.'/Oswald-Regular.ttf';
 $originalsize=87248;
 $fontkey='oswald';
 ?>
