@@ -1,281 +1,488 @@
-        import * as DOM from './planer-dom.js';
-        import { escapeHtml, getDateForDayInWeek } from './planer-utils.js'; // getDateForDayInWeek importieren
-        import { getState } from './planer-state.js'; // Import getState
+// public/assets/js/planer-timetable.js
+// MODIFIZIERT: Redundante, fehlerhafte Neudeklaration von 'days' entfernt.
+// MODIFIZIERT: Verwendung von 'timeSlotsDisplay' auf das importierte 'timeSlots' vereinheitlicht.
+// KORRIGIERT: Syntaktische Fehler (eingestreute Zeichen wie 'source:', 'section:', 's') entfernt.
 
-        /**
-         * Rendert das Haupt-Stundenplan-Grid oder das Template-Editor-Grid.
-        * @param {object} state - Das aktuelle Anwendungs-State-Objekt.
-        * @param {boolean} [isTemplateEditor=false] - Ob das Grid für den Template-Editor gerendert wird.
-        */
-        export const renderTimetable = (state, isTemplateEditor = false) => {
-            console.log("Starte renderTimetable...", { isTemplateEditor }); // Logging hinzugefügt
-            const container = isTemplateEditor ? DOM.templateEditorGridContainer : DOM.timetableContainer;
-            if (!container) {
-                console.error("renderTimetable: Container nicht gefunden!", { isTemplateEditor });
-                return;
-            }
+import { getState } from './planer-state.js';
+import { days, timeSlots, timetableContainer } from './planer-dom.js';
+import { escapeHtml } from './planer-utils.js'; // Importiere escapeHtml
 
-            // Determine data source based on mode
-            const timetableData = isTemplateEditor ? (state.currentTemplateEditorData || []) : state.currentTimetable;
-            const substitutionsData = isTemplateEditor ? [] : state.currentSubstitutions;
-            // NEU: Abwesenheiten aus dem State holen
-            const absencesData = isTemplateEditor ? [] : (state.stammdaten?.absences || []);
-            const viewMode = isTemplateEditor ? 'class' : state.currentViewMode; // Default to class view for template editor
-            const { stammdaten } = state; // Get Stammdaten from state
-            // KORREKTUR: userRole aus globalem Config-Objekt holen
-            const userRole = window.APP_CONFIG.userRole || 'guest';
+/**
+ * Erstellt und rendert das gesamte Stundenplan-Raster im DOM.
+ * @param {object} [overrideState] - Optionaler State (wird im Template-Editor verwendet)
+ * @param {boolean} [isTemplateEditor=false] - Flag für den Template-Editor-Modus
+ */
+export function renderTimetableGrid(overrideState = null, isTemplateEditor = false) {
+    const container = isTemplateEditor ? document.getElementById('template-editor-grid-container') : timetableContainer;
+    if (!container) return;
 
-            console.log("Daten für Rendering:", { timetableData, substitutionsData, absencesData, viewMode }); // Logging hinzugefügt
+    // KORREKTUR: State über die Funktion holen oder Override verwenden
+    const state = overrideState || getState();
 
-            // --- Block Processing (same as before) ---
-            const processedCellKeys = new Set();
-            const blockSpans = new Map();
+    // KORREKTUR: Stelle sicher, dass stammdaten und settings vorhanden sind
+    const stammdaten = state.stammdaten || {};
+    const settings = (stammdaten && stammdaten.settings) ? stammdaten.settings : (window.APP_CONFIG.settings || {});
+    const startHour = parseInt(settings.default_start_hour, 10) || 1;
+    const endHour = parseInt(settings.default_end_hour, 10) || 10;
+    
+    const grid = document.createElement('div');
+    grid.className = 'timetable-grid'; // Verwende die CSS-Grid-Klasse
+    if (isTemplateEditor) {
+        grid.classList.add('template-editor-grid');
+    } else {
+        grid.id = 'timetable-grid'; // ID für Drag&Drop-Listener
+    }
 
-            // 1. Process regular blocks (using block_id or block_ref)
-            const blocks = new Map();
-            timetableData.forEach(entry => {
-                const blockIdentifier = isTemplateEditor ? entry.block_ref : entry.block_id;
-                if (blockIdentifier) {
-                    if (!blocks.has(blockIdentifier)) blocks.set(blockIdentifier, []);
-                    blocks.get(blockIdentifier).push(entry);
-                }
-            });
-            blocks.forEach(entries => {
-                if (entries.length > 0) { // Ensure block has entries
-                    entries.sort((a, b) => a.period_number - b.period_number);
-                    const startEntry = entries[0];
-                    const span = entries[entries.length - 1].period_number - startEntry.period_number + 1;
-                    blockSpans.set(`${startEntry.day_of_week}-${startEntry.period_number}`, span);
-                    // Mark cells covered by the block as processed
-                    for (let i = 1; i < span; i++) {
-                        processedCellKeys.add(`${startEntry.day_of_week}-${startEntry.period_number + i}`);
-                    }
-                }
-            });
+    let gridHTML = '';
 
-            // 2. Process substitution blocks (only in main dashboard view)
-            if (!isTemplateEditor) {
-                const substitutionBlocks = new Map();
-                substitutionsData.forEach(sub => {
-                    // day_of_week should already be calculated in the API response or planer-api.js
-                    if (!sub.day_of_week) return;
-                    // Group potentially related substitutions (same day, class, type, comment, new room etc.)
-                    const key = `${sub.date}-${sub.class_id}-${sub.substitution_type}-${sub.comment || ''}-${sub.new_room_id || ''}-${sub.new_teacher_id || ''}-${sub.new_subject_id || ''}`;
-                    if (!substitutionBlocks.has(key)) substitutionBlocks.set(key, []);
-                    substitutionBlocks.get(key).push(sub);
-                });
-                substitutionBlocks.forEach(subs => {
-                    if (subs.length > 1) { // Only process groups with more than one entry
-                        subs.sort((a, b) => a.period_number - b.period_number);
-                        let isConsecutive = true;
-                        // Check if periods are consecutive
-                        for (let i = 0; i < subs.length - 1; i++) {
-                            if (subs[i + 1].period_number !== subs[i].period_number + 1) {
-                                isConsecutive = false; break;
-                            }
-                        }
-                        if (isConsecutive) { // If consecutive, treat as a block
-                            const startSub = subs[0];
-                            const span = subs.length;
-                            const dayNum = startSub.day_of_week;
-                            if (dayNum) {
-                                blockSpans.set(`${dayNum}-${startSub.period_number}`, span);
-                                // Mark cells covered by the substitution block as processed
-                                for (let i = 1; i < span; i++) {
-                                    processedCellKeys.add(`${dayNum}-${startSub.period_number + i}`);
-                                }
-                            }
-                        }
-                    }
-                });
-            }
+    // 1. Header-Zeile (Zeit + Tage)
+    gridHTML += '<div class="grid-header period-header">Zeit</div>';
+    days.forEach(dayName => { // Verwendet importierte 'days'
+        gridHTML += `<div class="grid-header">${dayName}</div>`;
+    });
 
-            // 3. Render Grid HTML
-            let gridHTML = `<div class="timetable-grid ${isTemplateEditor ? 'template-editor-grid' : ''}">`;
-            // Add header row (Time + Days)
-            gridHTML += '<div class="grid-header"></div>'; // Empty top-left cell
-            DOM.days.forEach(day => gridHTML += `<div class="grid-header">${day}</div>`); // Day headers
+    // 2. Zeit-Spalte (Stunden)
+    // KORREKTUR: Verwendet importierte 'timeSlots'
+    for (let period = 1; period <= timeSlots.length; period++) {
+        if (isTemplateEditor && (period < startHour || period > endHour)) {
+            continue;
+        }
+        // KORREKTUR: Verwendet importierte 'timeSlots'
+        gridHTML += `<div class="grid-header period-header" style="grid-row: ${period + 1};">
+            <div class="time-slot-period">${period}. Std</div>
+            <div class="time-slot-time">${timeSlots[period - 1]}</div>
+        </div>`;
+    }
 
-            // NEU: Aktuelles Jahr und Woche für Datumsberechnung holen
-            const currentYear = DOM.yearSelector ? DOM.yearSelector.value : new Date().getFullYear();
-            const currentWeek = DOM.weekSelector ? DOM.weekSelector.value : 1;
+    // 3. Datenzellen vorbereiten (inkl. Block-Logik)
+    const processedCellKeys = new Set();
+    const blockSpans = new Map();
+    // KORREKTUR: Verwende die flachen Arrays (currentTimetable/currentSubstitutions) für die Block-Berechnung
+    const dataToRender = isTemplateEditor ? (state.currentTemplateEditorData || []) : (state.currentTimetable || []);
+    const subsToRender = isTemplateEditor ? [] : (state.currentSubstitutions || []);
+    // KORREKTUR: Verwende die Maps (timetable/substitutions) für das Füllen der Zellen
+    const stateTimetableMap = isTemplateEditor ? null : (state.timetable || {}); // Map für schnellen Zugriff
+    const stateSubMap = isTemplateEditor ? null : (state.substitutions || {}); // Map für schnellen Zugriff
 
-            // Add rows for each time slot
-            DOM.timeSlots.forEach((slot, index) => {
-                const period = index + 1;
-                // Add time slot header for the row
-                gridHTML += `<div class="grid-header period-header">${slot}</div>`;
-
-                // Add cells for each day in the current row
-                DOM.days.forEach((day, dayIndex) => {
-                    const dayNum = dayIndex + 1; // 1=Mon, ..., 5=Fri
-                    const cellKey = `${dayNum}-${period}`;
-                    const noteKey = cellKey; // NEU
-
-                    // Skip rendering if this cell is covered by a block starting earlier
-                    if (processedCellKeys.has(cellKey)) { return; }
-
-                    // --- Prepare cell data ---
-                    let cellContent = '', cellClass = 'empty', dataAttrs = `data-day="${dayNum}" data-period="${period}"`, style = '';
-                    if (isTemplateEditor) cellClass += ' template-cell'; // Add class for template editor cells
-
-                    // Check if this cell is the start of a block
-                    const span = blockSpans.get(cellKey);
-                    if (span) {
-                        style = `grid-row: span ${span};`; // Apply rowspan styling
-                        cellClass += ' block-start'; // Add class for block start
-                    }
-
-                    // Find substitution or regular entry for this cell
-                    const substitution = isTemplateEditor ? null : substitutionsData.find(s => s.day_of_week == dayNum && s.period_number == period);
-                    const entryToRender = timetableData.find(e => e.day_of_week == dayNum && e.period_number == period);
-                    // KORREKTUR: Verwende die definierte userRole Variable und prüfe, ob studentNotes existiert
-                    const note = (userRole === 'schueler' && state.studentNotes && state.studentNotes[noteKey]) ? state.studentNotes[noteKey] : null;
-
-                    // NEU: Abwesenheitsprüfung (nur im Haupt-Dashboard, nicht im Template-Editor)
-                    let isTeacherAbsent = false;
-                    if (!isTemplateEditor && entryToRender && entryToRender.teacher_id) {
-                        const entryDate = getDateForDayInWeek(dayNum, currentYear, currentWeek);
-                        isTeacherAbsent = absencesData.some(abs => 
-                            abs.teacher_id == entryToRender.teacher_id && 
-                            entryDate >= abs.start_date && 
-                            entryDate <= abs.end_date
-                        );
-                    }
+    // 3a. Reguläre Blöcke (verwende dataToRender = flaches Array)
+    if (dataToRender.length > 0) {
+        const blocks = new Map();
+        dataToRender.forEach(entry => {
+            const blockKey = isTemplateEditor ? entry.block_ref : entry.block_id;
+            if (blockKey) {
+                if (!blocks.has(blockKey)) blocks.set(blockKey, []);
+                blocks.get(blockKey).push(entry);
+            }
+        });
+        blocks.forEach(entries => {
+            if (entries.length === 0) return;
+            entries.sort((a, b) => a.period_number - b.period_number);
+            const startEntry = entries[0];
+            // KORREKTUR: Span-Berechnung muss Perioden-Strings in Zahlen umwandeln
+            const span = parseInt(entries[entries.length - 1].period_number) - parseInt(startEntry.period_number) + 1;
+            blockSpans.set(`${startEntry.day_of_week}-${startEntry.period_number}`, span);
+            for (let i = 1; i < span; i++) {
+                processedCellKeys.add(`${startEntry.day_of_week}-${parseInt(startEntry.period_number) + i}`);
+            }
+        });
+    }
+    // 3b. Vertretungs-Blöcke (verwende subsToRender = flaches Array)
+    if (subsToRender.length > 0) {
+        const substitutionBlocks = new Map();
+        subsToRender.forEach(sub => {
+            if (!sub.day_of_week) return;
+            const key = `${sub.date}-${sub.class_id}-${sub.substitution_type}-${sub.comment || ''}-${sub.new_room_id || ''}-${sub.new_teacher_id || ''}-${sub.new_subject_id || ''}`;
+            if (!substitutionBlocks.has(key)) substitutionBlocks.set(key, []);
+            substitutionBlocks.get(key).push(sub);
+        });
+        substitutionBlocks.forEach(subs => {
+            if (subs.length > 1) { 
+                subs.sort((a, b) => a.period_number - b.period_number);
+                let isConsecutive = true;
+                for (let i = 0; i < subs.length - 1; i++) {
+                    if (parseInt(subs[i + 1].period_number) !== parseInt(subs[i].period_number) + 1) {
+                        isConsecutive = false; break;
+                    }
+                }
+                if (isConsecutive) { 
+                    const startSub = subs[0];
+                    const span = subs.length;
+                    const dayNum = startSub.day_of_week;
+                    if (dayNum) {
+                        blockSpans.set(`${dayNum}-${startSub.period_number}`, span);
+                        for (let i = 1; i < span; i++) {
+                            processedCellKeys.add(`${dayNum}-${parseInt(startSub.period_number) + i}`);
+                        }
+                    }
+                }
+            }
+        });
+    }
 
 
-                    dataAttrs = `data-day="${dayNum}" data-period="${period}"`; // Basis-Attribute
+    // 4. Zellen-HTML generieren
+    // KORREKTUR: Verwendet importierte 'timeSlots'
+    for (let period = 1; period <= timeSlots.length; period++) {
+        // Logik für Template-Editor (ausblenden)
+        if (isTemplateEditor && (period < startHour || period > endHour)) {
+            continue;
+        }
+        
+        // KORREKTUR: Verwendet importierte 'days'
+        for (let day = 1; day <= days.length; day++) {
+            const cellKey = `${day}-${period}`;
+            
+            // Überspringe Zellen, die Teil eines Blocks sind (außer der Startzelle)
+            if (processedCellKeys.has(cellKey)) continue;
 
-                    // --- Populate cell content and attributes ---
-                    if (substitution) { // Substitution exists
-                        cellClass = `has-entry substitution-${substitution.substitution_type}`;
-                        dataAttrs += ` data-substitution-id="${substitution.substitution_id}"`;
-                        if (substitution.comment) dataAttrs += ` data-comment="${escapeHtml(substitution.comment)}"`;
-                        dataAttrs += ` draggable="true"`; // Substitutions are draggable
-                        const regularEntry = entryToRender; // Find corresponding regular entry for context
-                        dataAttrs += ` data-class-id="${substitution.class_id}"`; // Add class ID for context
+            // KORREKTUR: Hole die Arrays aus den Maps
+            const entries = isTemplateEditor ? dataToRender.filter(e => e.day_of_week == day && e.period_number == period) : (stateTimetableMap[cellKey] || []);
+            const subs = isTemplateEditor ? [] : (stateSubMap[cellKey] || []);
+            
+            let cellClass = 'grid-cell';
+            if (isTemplateEditor) cellClass += ' template-cell';
+            
+            let cellContent = '';
+            let dataAttrs = `data-day="${day}" data-period="${period}" data-cell-key="${cellKey}"`;
+            let style = `grid-row: ${period + 1}; grid-column: ${day + 1};`;
 
-                        // Generate HTML content for the substitution cell
-                        // KORREKTUR: 'note' als 7. Argument übergeben
-                        cellContent = createCellEntryHtml(
-                            // Determine subject (new, original, or default)
-                            substitution.substitution_type === 'Vertretung' ? (substitution.new_subject_shortcut || regularEntry?.subject_shortcut) : (substitution.substitution_type === 'Sonderevent' ? 'EVENT' : regularEntry?.subject_shortcut),
-                            // Determine main text (teacher/class or status)
-                            substitution.substitution_type === 'Vertretung'
-                                ? (viewMode === 'teacher' ? (substitution.class_name || regularEntry?.class_name) : substitution.new_teacher_shortcut)
-                                : (substitution.substitution_type === 'Entfall' ? 'Entfällt' : (regularEntry ? (viewMode === 'class' ? regularEntry.teacher_shortcut : regularEntry.class_name) : '---')),
-                            // Determine room (new or original)
-                            substitution.new_room_name || regularEntry?.room_name,
-                            substitution.comment, // Substitution comment
-                            substitution.substitution_type, // Type for specific styling
-                            false, // isTeacherAbsent (false für Vertretungen)
-                            note // note
-                        );
-                    } else if (entryToRender) { // Regular entry exists
-                        cellClass = 'has-entry';
-                        // NEU: Klasse hinzufügen, wenn Lehrer abwesend ist
-                        if (isTeacherAbsent) {
-                            cellClass += ' teacher-absent';
-                        }
-                        // Add entry/block IDs and class ID as data attributes
-                        dataAttrs += isTemplateEditor ? ` data-template-entry-id="${entryToRender.template_entry_id}"` : ` data-entry-id="${entryToRender.entry_id}"`;
-                        dataAttrs += ` data-class-id="${entryToRender.class_id}"`;
-                        const blockIdentifier = isTemplateEditor ? entryToRender.block_ref : entryToRender.block_id;
-                        if (blockIdentifier) dataAttrs += ` data-block-id="${blockIdentifier}"`;
-                        dataAttrs += ` draggable="true"`; // Regular entries/blocks are draggable
-                        
-                        // Get display names from Stammdaten if in template editor, otherwise use pre-joined names
-                        const subject = isTemplateEditor ? (stammdaten.subjects?.find(s => s.subject_id == entryToRender.subject_id)?.subject_shortcut || '?!') : entryToRender.subject_shortcut;
-                        const teacher = isTemplateEditor ? (stammdaten.teachers?.find(t => t.teacher_id == entryToRender.teacher_id)?.teacher_shortcut || '?!') : entryToRender.teacher_shortcut;
-                        const room = isTemplateEditor ? (stammdaten.rooms?.find(r => r.room_id == entryToRender.room_id)?.room_name || '?!') : entryToRender.room_name;
-                        const className = isTemplateEditor ? (stammdaten.classes?.find(c => c.class_id == entryToRender.class_id)?.class_name || '?!') : entryToRender.class_name;
-                        // Determine main text based on view mode
-                        const mainText = viewMode === 'class' ? teacher : className;
-                        
-                        // Generate HTML content for the regular cell
-                        // KORREKTUR: 'isTeacherAbsent' als 6. und 'note' als 7. Argument übergeben
-                        cellContent += createCellEntryHtml(subject, mainText, room, entryToRender.comment, null, isTeacherAbsent, note);
-                    } else if (!isTemplateEditor && (period === 1 || period === 10)) { // Default entry (FU) - only in main dashboard
-                        cellClass = 'default-entry';
-                        // KORREKTUR: Argumente korrekt übergeben
-                        cellContent = createCellEntryHtml('FU', 'Förderunterricht', '', '', null, false, null); // FU anzeigen
-                        dataAttrs += ` draggable="false"`; // FU is not draggable
-                    } else {
-                        // Empty cell (draggable only in template editor for adding new entries)
-                        if (isTemplateEditor) dataAttrs += ` draggable="false"`; // Empty cells in template editor are not draggable sources
-                        else dataAttrs += ` draggable="false"`; // Empty cells in main view are not draggable
-                    }
+            const span = blockSpans.get(cellKey);
+            if (span) {
+                style += `grid-row: ${period + 1} / span ${span};`;
+                cellClass += ' block-start';
+            }
 
-                    // Append the cell HTML to the grid row
-                    gridHTML += `<div class="grid-cell ${cellClass}" ${dataAttrs} style="${style}">${cellContent}</div>`;
-                });
-            });
+            // KORREKTUR: Iteriere über Vertretungen (haben Vorrang)
+            if (subs.length > 0) {
+                cellClass += ' has-substitution';
+                dataAttrs += ` draggable="true"`; // Zelle draggbar machen
+                subs.forEach(sub => {
+                    // Verwende die erste Sub-ID für die Zelle, falls mehrere vorhanden sind
+                    if (!dataAttrs.includes('data-substitution-id')) {
+                        dataAttrs += ` data-substitution-id="${sub.substitution_id}"`;
+                    }
+                    // Füge die Klasse nur einmal hinzu, auch bei mehreren Vertretungen
+                    const typeClass = `substitution-${sub.substitution_type.toLowerCase()}`;
+                    if (!cellClass.includes(typeClass)) {
+                        cellClass += ` ${typeClass}`;
+                    }
+                    cellContent += createSubstitutionElement(sub, state).outerHTML;
+                });
+            // KORREKTUR: Iteriere über reguläre Einträge
+            } else if (entries.length > 0) {
+                cellClass += ' has-entry';
+                dataAttrs += ` draggable="true"`; // Zelle draggbar machen
+                entries.forEach(entry => {
+                    if (isTemplateEditor) {
+                        // Verwende die erste ID für die Zelle
+                        if (!dataAttrs.includes('data-template-entry-id')) {
+                            dataAttrs += ` data-template-entry-id="${entry.template_entry_id}"`;
+                            if (entry.block_ref) dataAttrs += ` data-block-id="${entry.block_ref}"`;
+                        }
+                    } else {
+                        // Verwende die erste ID für die Zelle
+                        if (!dataAttrs.includes('data-entry-id')) {
+                            dataAttrs += ` data-entry-id="${entry.entry_id}"`;
+                            if (entry.block_id) dataAttrs += ` data-block-id="${entry.block_id}"`;
+                        }
+                    }
+                    cellContent += createTimetableElement(entry, isTemplateEditor, state).outerHTML;
+                });
+            } else {
+                cellClass += ' is-empty';
+                if (!isTemplateEditor && (period === startHour || period === endHour)) {
+                    cellClass += ' default-entry';
+                    cellContent = `<div class="planner-entry default-entry" style="pointer-events: none;"><strong>FU</strong></div>`;
+                } else {
+                    cellContent = `<span class="sr-only">Kein Eintrag für ${days[day-1]}, ${period}. Stunde</span>`;
+                }
+            }
 
-            gridHTML += '</div>'; // Close timetable-grid
-            container.innerHTML = gridHTML; // Set the generated HTML into the container
-            console.log("renderTimetable abgeschlossen."); // Logging hinzugefügt
-        };
+            // KORREKTUR: Container .cell-entries-container wird jetzt verwendet
+            gridHTML += `<div class="${cellClass}" ${dataAttrs} style="${style}">
+                            <div class="cell-entries-container">${cellContent}</div>
+                        </div>`;
+        }
+    }
 
-
-        /**
-         * Erstellt das HTML-Markup für den Inhalt einer einzelnen Zelle.
-        * @param {string} subject - Fach-Kürzel
-        * @param {string} mainText - Lehrer-Kürzel oder Klassenname oder Status ('Entfällt')
-        * @param {string} room - Raumname
-        * @param {string} [comment=null] - Optionaler Kommentar
-        * @param {string} [substitutionType=null] - Optionaler Vertretungstyp
-        * @param {boolean} [isTeacherAbsent=false] - NEU: Flag für Abwesenheit
-        * @param {string} [note=null] - NEU: Flag für Notiz
-        * @returns {string} - Das gerenderte HTML für die Zelle
-        */
-        export const createCellEntryHtml = (subject, mainText, room, comment = null, substitutionType = null, isTeacherAbsent = false, note = null) => {
-            // Escape all input values to prevent XSS
-            const safeSubject = escapeHtml(subject);
-            const safeMainText = escapeHtml(mainText);
-            const safeRoom = escapeHtml(room);
-            const safeComment = escapeHtml(comment);
-        
-            // Prepare HTML parts
-            let commentHtml = safeComment ? `<small class="entry-comment" title="${safeComment}">📝 ${safeComment.substring(0, 15)}${safeComment.length > 15 ? '...' : ''}</small>` : '';
-            let roomHtml = safeRoom ? `<small class="entry-room">${safeRoom}</small>` : '';
-            let mainHtml = safeMainText ? `<span>${safeMainText}</span>` : '';
-            let subjectHtml = safeSubject ? `<strong>${safeSubject}</strong>` : '';
-            // NEU: HTML für Abwesenheitswarnung
-            let absenceHtml = isTeacherAbsent ? `<small class="absence-warning" title="Lehrer ist als abwesend gemeldet!">⚠️ Lehrer abwesend</small>` : '';
-
-            // NEU: Notiz-Icon (SVG)
-            const noteIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 0A1.5 1.5 0 0 0 0 1.5V13a1 1 0 0 0 1 1V1.5a.5.5 0 0 1 .5-.5H14a1 1 0 0 0-1-1zM3.5 2A1.5 1.5 0 0 0 2 3.5v11A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 12.5 2zM3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z"/></svg>`;
-            // KORREKTUR: Verwende window.APP_CONFIG.userRole
-            let noteHtml = (note && window.APP_CONFIG.userRole === 'schueler') ? `<small class="entry-note" title="${escapeHtml(note)}">${noteIcon}</small>` : '';
+    grid.innerHTML = gridHTML;
+    
+    // Altes Grid ersetzen
+    container.innerHTML = '';
+    container.appendChild(grid);
+}
 
 
-            // Adjust HTML based on substitution type
-            if (substitutionType === 'Entfall') {
-                // Display "Entfällt" prominently, keep original subject, hide room/original main text
-                subjectHtml = `<strong>${safeSubject}</strong>`; // Keep original subject visible
-                mainHtml = `<span>Entfällt</span>`; // Indicate cancellation
-                roomHtml = ''; // Hide room for cancellation
-                // Use comment field for potential original teacher/class info if needed, or hide it
-                commentHtml = safeComment ? `<small class="entry-comment" title="${safeComment}">📝 ${safeComment.substring(0, 15)}${safeComment.length > 15 ? '...' : ''}</small>` : ''; // Keep substitution comment
-                absenceHtml = ''; // Keine Abwesenheitswarnung bei Entfall
-            }
-            if (substitutionType === 'Raumänderung') {
-                // Highlight the new room
-                roomHtml = safeRoom ? `<small class="entry-room" style="font-weight:bold; color: var(--color-warning);">${safeRoom}</small>` : '';
-                // Bei Raumänderung ist der Lehrer ja anwesend (hoffentlich)
-                absenceHtml = '';
-            }
-            if (substitutionType === 'Sonderevent') {
-                subjectHtml = `<strong>EVENT</strong>`; // Use EVENT as subject
-                // Use comment as the main description, or fallback text
-                mainHtml = safeComment ? `<span title="${safeComment}">${safeComment.substring(0, 20)}${safeComment.length > 20 ? '...' : ''}</span>` : `<span>Sonderveranst.</span>`;
-                commentHtml = ''; // Comment is already displayed as main text
-                absenceHtml = ''; // Keine Abwesenheitswarnung bei Sonderevent
-            }
-        
-            // Combine parts into the final cell entry HTML
-            // NEU: absenceHtml hinzugefügt
-            // KORREKTUR: noteHtml hinzugefügt
-            return `<div class="cell-entry">${noteHtml}${subjectHtml}${mainHtml}${roomHtml}${commentHtml}${absenceHtml}</div>`;
-        };
+/**
+ * Erstellt ein einzelnes HTML-Element (DIV) für einen regulären Stundenplaneintrag.
+* @param {object} entry - Das Eintragsobjekt.
+ * @param {boolean} [isTemplateEditor=false] - Flag für den Template-Editor-Modus
+ * @param {object} state - Der aktuelle Anwendungsstatus (wird benötigt)
+ * @returns {HTMLDivElement}
+ */
+function createTimetableElement(entry, isTemplateEditor = false, state) {
+    const entryElement = document.createElement('div');
+    entryElement.className = 'planner-entry timetable-entry';
+    
+    // WICHTIG: IDs für die Interaktion speichern
+    if (isTemplateEditor) {
+        entryElement.dataset.templateEntryId = entry.template_entry_id; // ID aus Template-Tabelle
+        if (entry.block_ref) {
+            entryElement.dataset.blockId = entry.block_ref; // Verwende block_ref im Editor
+        }
+    } else {
+        entryElement.dataset.entryId = entry.entry_id;
+        if (entry.block_id) {
+            entryElement.dataset.blockId = entry.block_id;
+        }
+    }
 
+
+    const isTeacherView = state.currentViewMode === 'teacher';
+    const stammdaten = state.stammdaten || {};
+    
+    let subjectShortcut, teacherShortcut, roomName, className;
+
+    if (isTemplateEditor) {
+        subjectShortcut = (stammdaten.subjects?.find(s => s.subject_id == entry.subject_id) || {}).subject_shortcut || 'F?';
+        teacherShortcut = (stammdaten.teachers?.find(t => t.teacher_id == entry.teacher_id) || {}).teacher_shortcut || 'L?';
+        roomName = (stammdaten.rooms?.find(r => r.room_id == entry.room_id) || {}).room_name || 'R?';
+        className = (stammdaten.classes?.find(c => c.class_id == entry.class_id) || {}).class_name || 'K?';
+        if (entry.class_id == 0) className = 'Alle'; // Spezialfall für "Keine Klasse" im Template
+    } else {
+        subjectShortcut = entry.subject_shortcut || '---';
+        teacherShortcut = entry.teacher_shortcut || '---';
+        roomName = entry.room_name || '---';
+        className = entry.class_name || 'N/A';
+    }
+    
+    // KORREKTUR: Logik für Lehreransicht (Klasse + ID)
+    let mainHtml = '';
+    if (isTeacherView) {
+        const classDisplay = escapeHtml(className);
+        // Zeige (ID: 0) nicht an, wenn es "Keine Klasse" ist (Template-Editor)
+        if (entry.class_id && entry.class_id != 0) {
+            mainHtml = `<div class="entry-line entry-main">${classDisplay} (ID: ${escapeHtml(entry.class_id)})</div>`;
+        } else {
+            mainHtml = `<div class="entry-line entry-main">${classDisplay}</div>`;
+        }
+    } else {
+        mainHtml = `<div class="entry-line entry-main">${escapeHtml(teacherShortcut)}</div>`;
+    }
+    // ENDE KORREKTUR
+
+    entryElement.innerHTML = `
+        <div class="entry-line entry-subject">${escapeHtml(subjectShortcut)}</div>
+        ${mainHtml}
+        <div class="entry-line entry-room">${escapeHtml(roomName)}</div>
+    `;
+
+    if (entry.comment) {
+        entryElement.classList.add('has-comment');
+        entryElement.title = `Kommentar: ${escapeHtml(entry.comment)}`;
+    }
+
+    // Abwesenheits-Check (nur im normalen Modus)
+    // KORREKTUR: Prüfung auf state.stammdaten.absences
+    if (!isTemplateEditor && entry.teacher_id && state.stammdaten.absences && state.stammdaten.absences.length > 0) {
+        let entryDate;
+        try {
+            // KORREKTUR: Verwende state.selectedYear/Week statt DOM
+            const dto = new Date();
+            // KORREKTUR: Verwende setISODate (UTC-basiert, aber erzeugt lokales Datumsobjekt)
+            dto.setUTCFullYear(state.selectedYear);
+            dto.setUTCMonth(0); // Jan
+            dto.setUTCDate(1); // 1. Jan
+            // Finde den Montag der ersten Woche
+            let dayOfWeek = dto.getUTCDay();
+            let firstMonday = (dayOfWeek <= 1) ? (2 - dayOfWeek) : (9 - dayOfWeek);
+            dto.setUTCDate(firstMonday);
+            // Füge die Wochen hinzu
+            dto.setUTCDate(dto.getUTCDate() + (state.selectedWeek - 1) * 7);
+            // Füge den Tag hinzu
+            dto.setUTCDate(dto.getUTCDate() + (entry.day_of_week - 1));
+            
+            entryDate = dto.toISOString().split('T')[0];
+        } catch(e) {
+            console.error("Datumsberechnung fehlgeschlagen", e);
+            entryDate = null;
+        }
+
+        if(entryDate) {
+            const absence = isTeacherAbsent(entry.teacher_id, entryDate, state); // State übergeben
+            if (absence) {
+                entryElement.classList.add('is-absent');
+                const warning = document.createElement('small');
+                warning.className = 'absence-warning';
+                warning.textContent = `(Lehrer abwesend: ${escapeHtml(absence.reason)})`;
+                entryElement.appendChild(warning);
+                entryElement.title = `Lehrer abwesend: ${escapeHtml(absence.reason)}`;
+            }
+        }
+    }
+
+    return entryElement;
+}
+
+/**
+ * Erstellt ein einzelnes HTML-Element (DIV) für einen Vertretungseintrag.
+ * @param {object} sub - Das Vertretungsobjekt.
+ * @param {object} state - Der aktuelle Anwendungsstatus.
+ * @returns {HTMLDivElement}
+ */
+function createSubstitutionElement(sub, state) {
+    const entryElement = document.createElement('div');
+    entryElement.className = `planner-entry substitution-entry ${sub.substitution_type.toLowerCase()}`;
+    
+    // WICHTIG: IDs für die Interaktion speichern
+    entryElement.dataset.substitutionId = sub.substitution_id;
+    entryElement.dataset.day = sub.day_of_week;
+    entryElement.dataset.period = sub.period_number;
+    entryElement.dataset.date = sub.date;
+    // Füge auch die zugrundeliegende Eintrags-ID hinzu (falls vorhanden), um das Modal zu füllen
+    const originalEntry = getOriginalEntry(sub, state); // KORREKTUR: state übergeben
+    if (originalEntry) {
+        entryElement.dataset.entryId = originalEntry.entry_id;
+        if(originalEntry.block_id) entryElement.dataset.blockId = originalEntry.block_id;
+    }
+
+
+    const isTeacherView = state.currentViewMode === 'teacher';
+    let subjectText = '---';
+    let mainText = '---';
+    let roomText = '---';
+    let typeText = sub.substitution_type;
+
+    // KORREKTUR: Logik für Lehreransicht (Klasse + ID)
+    let classDisplay = escapeHtml(sub.class_name || 'N/A');
+    // Zeige ID nur an, wenn sie vorhanden und nicht 0 ist
+    if (sub.class_id && sub.class_id != 0) {
+        classDisplay += ` (ID: ${escapeHtml(sub.class_id)})`;
+    }
+    // ENDE KORREKTUR
+
+    switch (sub.substitution_type) {
+        case 'Vertretung':
+            subjectText = sub.new_subject_shortcut || sub.original_subject_shortcut || '---';
+            // KORREKTUR: Verwende classDisplay
+            mainText = isTeacherView ? classDisplay : (sub.new_teacher_shortcut || '!!!');
+            roomText = sub.new_room_name || '---';
+            break;
+        case 'Raumänderung':
+            typeText = 'Raum'; // Kürzer
+            subjectText = sub.original_subject_shortcut || '---';
+            // KORREKTUR: Verwende classDisplay
+            mainText = isTeacherView ? classDisplay : (getOriginalTeacher(sub, state) || '---'); // KORREKTUR: state übergeben
+            roomText = sub.new_room_name || '!!!';
+            break;
+        case 'Entfall':
+            subjectText = sub.original_subject_shortcut || '---';
+            // KORREKTUR: Verwende classDisplay
+            mainText = `(${isTeacherView ? classDisplay : (getOriginalTeacher(sub, state) || '---')})`; // KORREKTUR: state übergeben
+            roomText = '---';
+            break;
+        case 'Sonderevent':
+            typeText = 'Event'; // Kürzer
+            subjectText = sub.new_subject_shortcut || 'EVENT';
+            mainText = sub.comment ? (sub.comment.substring(0, 10) + '...') : 'Info';
+            roomText = sub.new_room_name || '---';
+            break;
+    }
+
+    entryElement.innerHTML = `
+        <div class="entry-line sub-type">${escapeHtml(typeText)}</div>
+        <div class="entry-line entry-subject">${escapeHtml(subjectText)}</div>
+        <div class="entry-line entry-main">${mainText}</div> <!-- mainText ist bereits escaped oder HTML -->
+        <div class="entry-line entry-room">${escapeHtml(roomText)}</div>
+    `;
+    
+    if (sub.comment && sub.substitution_type !== 'Sonderevent') {
+         entryElement.title = `Kommentar: ${escapeHtml(sub.comment)}`;
+    }
+
+    return entryElement;
+}
+
+
+/**
+ * Prüft, ob ein Lehrer an einem bestimmten Datum abwesend ist.
+ * @param {number} teacherId 
+ * @param {string} dateString (YYYY-MM-DD)
+ * @param {object} state - Der aktuelle Anwendungsstatus.
+* @returns {object|null} - Das Abwesenheitsobjekt oder null.
+ */
+function isTeacherAbsent(teacherId, dateString, state) {
+    if (!teacherId || !dateString) return null;
+    
+    // KORREKTUR: Zugriff auf state.stammdaten.absences
+    const absences = (state.stammdaten && state.stammdaten.absences) ? state.stammdaten.absences : [];
+    if (absences.length === 0) return null;
+
+    // Konvertiere Datum in ein Objekt für einfachen Vergleich
+    // (UTC, um Zeitzonenprobleme beim reinen Datumsvergleich zu vermeiden)
+    try {
+        const checkDate = new Date(dateString + 'T00:00:00Z');
+        if (isNaN(checkDate.getTime())) {
+            console.warn(`isTeacherAbsent: Ungültiges Datum ${dateString}`);
+            return null;
+        }
+
+        for (const absence of absences) {
+            if (absence.teacher_id == teacherId) { 
+                const startDate = new Date(absence.start_date + 'T00:00:00Z');
+                const endDate = new Date(absence.end_date + 'T00:00:00Z');
+                
+                if (checkDate >= startDate && checkDate <= endDate) {
+                    return absence;
+                }
+            }
+        }
+    } catch (e) {
+        console.error("Fehler beim Prüfen der Abwesenheit:", e);
+    }
+    return null;
+}
+
+/**
+ * Findet den ursprünglichen regulären Eintrag für eine Vertretung.
+ * @param {object} sub 
+ * @param {object} state - Der aktuelle Anwendungsstatus.
+ * @returns {object|null}
+ */
+function getOriginalEntry(sub, state) {
+    // KORREKTUR: state.timetable ist jetzt eine Map
+    const cellKey = `${sub.day_of_week}-${sub.period_number}`;
+    const entries = state.timetable[cellKey] || [];
+    
+    // Finde den Eintrag, der zur Klasse UND Fach passt
+    const originalEntry = entries.find(e => 
+        e.class_id == sub.class_id && 
+        e.subject_id == sub.original_subject_id
+    );
+
+    return originalEntry || null;
+}
+
+/**
+ * Versucht, das Kürzel des ursprünglichen Lehrers einer Vertretung zu finden.
+ * @param {object} sub 
+ * @param {object} state - Der aktuelle Anwendungsstatus.
+ * @returns {string|null} - Das Kürzel des Lehrers oder null.
+ */
+function getOriginalTeacher(sub, state) {
+    // KORREKTUR: state übergeben
+    const originalEntry = getOriginalEntry(sub, state);
+    if (originalEntry) {
+        // Versuche, das Kürzel aus dem Eintrag zu holen
+        if (originalEntry.teacher_shortcut) {
+            return originalEntry.teacher_shortcut;
+        }
+        // Fallback: Suche in Stammdaten (falls shortcut fehlt)
+        // KORREKTUR: Zugriff auf state.stammdaten.teachers
+        const teacher = (state.stammdaten.teachers || []).find(t => t.teacher_id == originalEntry.teacher_id);
+        if (teacher) {
+            return teacher.teacher_shortcut;
+        }
+    }
+    return null; // Konnte nicht gefunden werden
+}

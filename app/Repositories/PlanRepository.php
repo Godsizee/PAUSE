@@ -98,9 +98,9 @@ class PlanRepository
      */
     public function getPublishedSubstitutionsForTeacherWeek(int $teacherId, int $year, int $calendarWeek): array
     {
-         if (!$this->isWeekPublishedFor('teacher', $year, $calendarWeek)) {
-             return [];
-         }
+        if (!$this->isWeekPublishedFor('teacher', $year, $calendarWeek)) {
+            return [];
+        }
         // Use the AsPlaner method as the underlying data is the same
         return $this->getSubstitutionsForTeacherWeekAsPlaner($teacherId, $year, $calendarWeek);
     }
@@ -121,11 +121,11 @@ class PlanRepository
                 LEFT JOIN subjects s ON te.subject_id = s.subject_id
                 LEFT JOIN teachers t ON te.teacher_id = t.teacher_id
                 LEFT JOIN rooms r ON te.room_id = r.room_id
-                JOIN classes c ON te.class_id = c.class_id
+                LEFT JOIN classes c ON te.class_id = c.class_id
                 WHERE te.class_id = :class_id
                     AND te.year = :year
                     AND te.calendar_week = :calendar_week
-                ORDER BY te.day_of_week ASC, te.period_number ASC";
+                ORDER BY te.day_of_week ASC, te.period_number ASC, te.entry_id ASC"; // KORRIGIERT: Sortiere nach entry_id für parallele
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([':class_id' => $classId, ':year' => $year, ':calendar_week' => $calendarWeek]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -143,13 +143,13 @@ class PlanRepository
         $sql = "SELECT te.*, s.subject_shortcut, s.subject_name, c.class_name, r.room_name, t.teacher_shortcut
                 FROM timetable_entries te
                 LEFT JOIN subjects s ON te.subject_id = s.subject_id
-                JOIN classes c ON te.class_id = c.class_id
+                LEFT JOIN classes c ON te.class_id = c.class_id
                 LEFT JOIN rooms r ON te.room_id = r.room_id
                 JOIN teachers t ON te.teacher_id = t.teacher_id
                 WHERE te.teacher_id = :teacher_id
                     AND te.year = :year
                     AND te.calendar_week = :calendar_week
-                ORDER BY te.day_of_week ASC, te.period_number ASC";
+                ORDER BY te.day_of_week ASC, te.period_number ASC, te.entry_id ASC"; // KORRIGIERT: Sortiere nach entry_id für parallele
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([':teacher_id' => $teacherId, ':year' => $year, ':calendar_week' => $calendarWeek]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -193,21 +193,21 @@ class PlanRepository
 
         // Calculate day_of_week (1=Mon, 5=Fri) using SQL DAYOFWEEK (Sunday=1, Monday=2...). Exclude weekends.
         $sql = "SELECT
-                            s.*,
-                            DAYOFWEEK(s.date) as day_of_week_iso, /* MySQL Sunday=1, keep for reference */
-                            CASE DAYOFWEEK(s.date) WHEN 1 THEN NULL WHEN 7 THEN NULL ELSE DAYOFWEEK(s.date) - 1 END as day_of_week, /* Calculate day_of_week (1=Mon, 5=Fri) */
-                            orig_s.subject_shortcut as original_subject_shortcut,
-                            new_t.teacher_shortcut as new_teacher_shortcut,
-                            new_s.subject_shortcut as new_subject_shortcut,
-                            new_r.room_name as new_room_name,
-                            c.class_name
-                        FROM substitutions s
-                        JOIN classes c ON s.class_id = c.class_id
-                        LEFT JOIN subjects orig_s ON s.original_subject_id = orig_s.subject_id
-                        LEFT JOIN teachers new_t ON s.new_teacher_id = new_t.teacher_id
-                        LEFT JOIN subjects new_s ON s.new_subject_id = new_s.subject_id
-                        LEFT JOIN rooms new_r ON s.new_room_id = new_r.room_id
-                        WHERE s.date BETWEEN :start_date AND :end_date";
+                                s.*,
+                                DAYOFWEEK(s.date) as day_of_week_iso, /* MySQL Sunday=1, keep for reference */
+                                CASE DAYOFWEEK(s.date) WHEN 1 THEN NULL WHEN 7 THEN NULL ELSE DAYOFWEEK(s.date) - 1 END as day_of_week, /* Calculate day_of_week (1=Mon, 5=Fri) */
+                                orig_s.subject_shortcut as original_subject_shortcut,
+                                new_t.teacher_shortcut as new_teacher_shortcut,
+                                new_s.subject_shortcut as new_subject_shortcut,
+                                new_r.room_name as new_room_name,
+                                c.class_name
+                            FROM substitutions s
+                            JOIN classes c ON s.class_id = c.class_id
+                            LEFT JOIN subjects orig_s ON s.original_subject_id = orig_s.subject_id
+                            LEFT JOIN teachers new_t ON s.new_teacher_id = new_t.teacher_id
+                            LEFT JOIN subjects new_s ON s.new_subject_id = new_s.subject_id
+                            LEFT JOIN rooms new_r ON s.new_room_id = new_r.room_id
+                            WHERE s.date BETWEEN :start_date AND :end_date";
 
         $params = [':start_date' => $startDate, ':end_date' => $endDate];
 
@@ -217,14 +217,14 @@ class PlanRepository
         } elseif ($teacherId !== null) {
             // Check if the teacher is the new teacher OR was the original teacher of the replaced lesson
             $sql .= " AND (s.new_teacher_id = :teacher_id OR EXISTS (
-                            SELECT 1 FROM timetable_entries te
-                            WHERE te.class_id = s.class_id
-                                AND te.year = :year
-                                AND te.calendar_week = :calendar_week
-                                AND te.day_of_week = (CASE DAYOFWEEK(s.date) WHEN 1 THEN NULL WHEN 7 THEN NULL ELSE DAYOFWEEK(s.date) - 1 END)
-                                AND te.period_number = s.period_number
-                                AND te.teacher_id = :teacher_id
-                        ))";
+                                SELECT 1 FROM timetable_entries te
+                                WHERE te.class_id = s.class_id
+                                    AND te.year = :year
+                                    AND te.calendar_week = :calendar_week
+                                    AND te.day_of_week = (CASE DAYOFWEEK(s.date) WHEN 1 THEN NULL WHEN 7 THEN NULL ELSE DAYOFWEEK(s.date) - 1 END)
+                                    AND te.period_number = s.period_number
+                                    AND te.teacher_id = :teacher_id
+                            ))";
             $params[':teacher_id'] = $teacherId;
             $params[':year'] = $year; // Add year and week for subquery
             $params[':calendar_week'] = $calendarWeek;
@@ -353,23 +353,25 @@ class PlanRepository
     public function createOrUpdateEntry(array $data): array
     {
         // Validate required fields
-        $required = ['year', 'calendar_week', 'day_of_week', 'class_id', 'teacher_id', 'subject_id', 'room_id'];
+        $required = ['year', 'calendar_week', 'day_of_week', 'teacher_id', 'subject_id', 'room_id'];
         foreach ($required as $field) {
             // Check if required fields potentially holding ID '0' are missing or truly empty strings
             // IDs should usually start from 1. If '0' is not valid, add $data[$field] === 0 check.
-             // Allow class_id '0' for teacher-mode entries
-            if ($field === 'class_id' && ($data[$field] === 0 || $data[$field] === '0')) {
-                // Skip check, '0' is allowed for class_id
-            }
-            elseif (!isset($data[$field]) || $data[$field] === '') {
+            if (!isset($data[$field]) || $data[$field] === '') {
                 throw new Exception("Fehlende Daten: Feld '{$field}' ist erforderlich und darf nicht leer sein.");
             }
         }
+        
+        // class_id '0' or null IS allowed for teacher-mode entries
+        if (!isset($data['class_id'])) {
+             throw new Exception("Fehlende Daten: Feld 'class_id' ist erforderlich.");
+        }
+
 
         // Sanitize comment
         $comment = isset($data['comment']) ? trim($data['comment']) : null;
         if ($comment === '') {
-             $comment = null; // Store NULL instead of empty string
+            $comment = null; // Store NULL instead of empty string
         }
 
         $startPeriod = (int)($data['start_period_number'] ?? $data['period_number'] ?? 0);
@@ -396,41 +398,28 @@ class PlanRepository
         // --- Transaction ---
         $this->pdo->beginTransaction();
         try {
-            // Delete existing entries for this exact slot(s) first
-            // If updating, delete the specific old entry/block instead of just the timeslot
-             if (!empty($data['entry_id']) && filter_var($data['entry_id'], FILTER_VALIDATE_INT)) {
-                 $deleteSql = "DELETE FROM timetable_entries WHERE entry_id = :entry_id";
-                 $deleteParams = [':entry_id' => $data['entry_id']];
+            
+            // *** KORREKTUR: Lösche NUR, wenn eine ID (für ein Update/Verschieben) übergeben wurde ***
+            if (!empty($data['entry_id']) && filter_var($data['entry_id'], FILTER_VALIDATE_INT)) {
+                $deleteSql = "DELETE FROM timetable_entries WHERE entry_id = :entry_id";
+                $deleteParams = [':entry_id' => $data['entry_id']];
+                $deleteStmt = $this->pdo->prepare($deleteSql);
+                $deleteStmt->execute($deleteParams);
             } elseif (!empty($data['block_id'])) {
-                 $deleteSql = "DELETE FROM timetable_entries WHERE block_id = :block_id";
-                 $deleteParams = [':block_id' => $data['block_id']];
-            } else {
-                 // Deleting by timeslot (when creating a new entry over an empty slot - shouldn't delete anything, but safe)
-                 $deleteSql = "DELETE FROM timetable_entries
-                                 WHERE year = :year
-                                   AND calendar_week = :calendar_week
-                                   AND day_of_week = :day_of_week
-                                   AND class_id = :class_id
-                                   AND period_number >= :start_period AND period_number <= :end_period";
-                 $deleteParams = [
-                     ':year' => $data['year'],
-                     ':calendar_week' => $data['calendar_week'],
-                     ':day_of_week' => $data['day_of_week'],
-                     ':class_id' => $data['class_id'], // Ensure deletion is class-specific
-                     ':start_period' => $startPeriod,
-                     ':end_period' => $endPeriod
-                 ];
+                $deleteSql = "DELETE FROM timetable_entries WHERE block_id = :block_id";
+                $deleteParams = [':block_id' => $data['block_id']];
+                $deleteStmt = $this->pdo->prepare($deleteSql);
+                $deleteStmt->execute($deleteParams);
             }
-
-             $deleteStmt = $this->pdo->prepare($deleteSql);
-             $deleteStmt->execute($deleteParams);
+            // *** DER 'ELSE'-BLOCK (LÖSCHEN NACH ZELLE) WURDE HIER ENTFERNT ***
+            // *** DIES ERLAUBT NUN PARALLELE EINTRÄGE ***
 
 
             // Generate block_id only if it's a multi-period entry
             $blockId = ($startPeriod !== $endPeriod) ? uniqid('block_', true) : null;
 
             $insertSql = "INSERT INTO timetable_entries (year, calendar_week, day_of_week, period_number, class_id, teacher_id, subject_id, room_id, block_id, comment)
-                           VALUES (:year, :calendar_week, :day_of_week, :period_number, :class_id, :teacher_id, :subject_id, :room_id, :block_id, :comment)";
+                            VALUES (:year, :calendar_week, :day_of_week, :period_number, :class_id, :teacher_id, :subject_id, :room_id, :block_id, :comment)";
 
             $insertStmt = $this->pdo->prepare($insertSql);
 
@@ -453,17 +442,17 @@ class PlanRepository
                     $errorInfo = $insertStmt->errorInfo();
                     throw new PDOException("Fehler beim Einfügen von Stunde {$period}. SQLSTATE[{$errorInfo[0]}]: {$errorInfo[2]}");
                 }
-                 $insertedIds[] = $this->pdo->lastInsertId(); // Store last insert ID
+                $insertedIds[] = $this->pdo->lastInsertId(); // Store last insert ID
             }
 
             $this->pdo->commit();
 
             // Return relevant info
-             return [
-                 'block_id' => $blockId,
-                 'entry_ids' => $insertedIds, // Return array of created entry IDs
-                 'periods' => range($startPeriod, $endPeriod)
-             ];
+            return [
+                'block_id' => $blockId,
+                'entry_ids' => $insertedIds, // Return array of created entry IDs
+                'periods' => range($startPeriod, $endPeriod)
+            ];
 
         } catch (Exception $e) {
             $this->pdo->rollBack();
@@ -524,8 +513,8 @@ class PlanRepository
             // 2. Prüfe auf Doppelbuchung (Vertretungen)
             $sqlCheckSub = "SELECT 1 FROM substitutions 
                             WHERE new_teacher_id = :teacher_id 
-                              AND date = :date AND period_number = :period
-                              AND substitution_id != :exclude_id
+                                AND date = :date AND period_number = :period
+                                AND substitution_id != :exclude_id
                             LIMIT 1";
             $stmtCheckSub = $this->pdo->prepare($sqlCheckSub);
             $stmtCheckSub->execute([
@@ -609,59 +598,57 @@ class PlanRepository
             throw new Exception("Fehler beim Speichern der Vertretung.");
         }
 
-         if ($currentId === null) {
-             $currentId = (int)$this->pdo->lastInsertId();
-         }
+        if ($currentId === null) {
+            $currentId = (int)$this->pdo->lastInsertId();
+        }
 
-         // Fetch the saved data to return it (including potentially looked up names/shortcuts)
-         $savedData = $this->getSubstitutionById($currentId);
-         if (!$savedData) {
-             // Fallback if fetch fails, return input data with ID
-             $data['substitution_id'] = $currentId;
-             // Add calculated day_of_week for consistency
-             try {
-                 $dateObj = new DateTime($data['date']);
-                 $dayOfWeek = $dateObj->format('N'); // 1 (Mon) - 7 (Sun)
-                 $data['day_of_week'] = ($dayOfWeek >= 1 && $dayOfWeek <= 5) ? $dayOfWeek : null;
-                 $data['day_of_week_iso'] = $dateObj->format('N'); // Keep ISO day if needed elsewhere
-             } catch (Exception $e) {
-                 $data['day_of_week'] = null;
-                 $data['day_of_week_iso'] = null;
-             }
-             return $data;
-         }
-         return $savedData;
+        // Fetch the saved data to return it (including potentially looked up names/shortcuts)
+        $savedData = $this->getSubstitutionById($currentId);
+        if (!$savedData) {
+            // Fallback if fetch fails, return input data with ID
+            $data['substitution_id'] = $currentId;
+            // Add calculated day_of_week for consistency
+            try {
+                $dateObj = new DateTime($data['date']);
+                $dayOfWeek = $dateObj->format('N'); // 1 (Mon) - 7 (Sun)
+                $data['day_of_week'] = ($dayOfWeek >= 1 && $dayOfWeek <= 5) ? $dayOfWeek : null;
+                $data['day_of_week_iso'] = $dateObj->format('N'); // Keep ISO day if needed elsewhere
+            } catch (Exception $e) {
+                $data['day_of_week'] = null;
+                $data['day_of_week_iso'] = null;
+            }
+            return $data;
+        }
+        return $savedData;
     }
 
-     /**
-      * Holt eine einzelne Vertretung anhand ihrer ID mit zusätzlichen Details.
-      * @param int $substitutionId
-      * @return array|false
-      */
-     public function getSubstitutionById(int $substitutionId): array|false
-     {
-         $sql = "SELECT
-                                    s.*,
-                                    DAYOFWEEK(s.date) as day_of_week_iso, /* MySQL Sunday=1 */
-                                    CASE DAYOFWEEK(s.date) WHEN 1 THEN NULL WHEN 7 THEN NULL ELSE DAYOFWEEK(s.date) - 1 END as day_of_week, /* Calculate day_of_week (1=Mon, 5=Fri) */
-                                    orig_s.subject_shortcut as original_subject_shortcut,
-                                    new_t.teacher_shortcut as new_teacher_shortcut,
-                                    new_s.subject_shortcut as new_subject_shortcut,
-                                    new_r.room_name as new_room_name,
-                                    c.class_name
-                                FROM substitutions s
-                                JOIN classes c ON s.class_id = c.class_id
-                                LEFT JOIN subjects orig_s ON s.original_subject_id = orig_s.subject_id
-                                LEFT JOIN teachers new_t ON s.new_teacher_id = new_t.teacher_id
-                                LEFT JOIN subjects new_s ON s.new_subject_id = new_s.subject_id
-                                LEFT JOIN rooms new_r ON s.new_room_id = new_r.room_id
-                                WHERE s.substitution_id = :id";
-         $stmt = $this->pdo->prepare($sql);
-         $stmt->execute([':id' => $substitutionId]);
-         return $stmt->fetch(PDO::FETCH_ASSOC);
-     }
-
-
+    /**
+     * Holt eine einzelne Vertretung anhand ihrer ID mit zusätzlichen Details.
+     * @param int $substitutionId
+     * @return array|false
+     */
+    public function getSubstitutionById(int $substitutionId): array|false
+    {
+        $sql = "SELECT
+                                        s.*,
+                                        DAYOFWEEK(s.date) as day_of_week_iso, /* MySQL Sunday=1 */
+                                        CASE DAYOFWEEK(s.date) WHEN 1 THEN NULL WHEN 7 THEN NULL ELSE DAYOFWEEK(s.date) - 1 END as day_of_week, /* Calculate day_of_week (1=Mon, 5=Fri) */
+                                        orig_s.subject_shortcut as original_subject_shortcut,
+                                        new_t.teacher_shortcut as new_teacher_shortcut,
+                                        new_s.subject_shortcut as new_subject_shortcut,
+                                        new_r.room_name as new_room_name,
+                                        c.class_name
+                                    FROM substitutions s
+                                    JOIN classes c ON s.class_id = c.class_id
+                                    LEFT JOIN subjects orig_s ON s.original_subject_id = orig_s.subject_id
+                                    LEFT JOIN teachers new_t ON s.new_teacher_id = new_t.teacher_id
+                                    LEFT JOIN subjects new_s ON s.new_subject_id = new_s.subject_id
+                                    LEFT JOIN rooms new_r ON s.new_room_id = new_r.room_id
+                                    WHERE s.substitution_id = :id";
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([':id' => $substitutionId]);
+        return $stmt->fetch(PDO::FETCH_ASSOC);
+    }
     /**
      * Löscht eine Vertretung.
      * @param int $substitutionId
@@ -686,15 +673,15 @@ class PlanRepository
     {
         $conflicts = [];
         $baseSql = "SELECT te.*, c.class_name, t.teacher_shortcut, r.room_name
-                                FROM timetable_entries te
-                                LEFT JOIN classes c ON te.class_id = c.class_id
-                                LEFT JOIN teachers t ON te.teacher_id = t.teacher_id
-                                LEFT JOIN rooms r ON te.room_id = r.room_id
-                                WHERE te.year = :year
-                                  AND te.calendar_week = :calendar_week
-                                  AND te.day_of_week = :day_of_week
-                                  AND te.period_number >= :start_period
-                                  AND te.period_number <= :end_period";
+                            FROM timetable_entries te
+                            LEFT JOIN classes c ON te.class_id = c.class_id
+                            LEFT JOIN teachers t ON te.teacher_id = t.teacher_id
+                            LEFT JOIN rooms r ON te.room_id = r.room_id
+                            WHERE te.year = :year
+                                AND te.calendar_week = :calendar_week
+                                AND te.day_of_week = :day_of_week
+                                AND te.period_number >= :start_period
+                                AND te.period_number <= :end_period";
 
         $params = [
             ':year' => $data['year'],
@@ -753,7 +740,7 @@ class PlanRepository
         }
 
         // 2. Check Room Conflict (booked by another class at the same time)
-         if (!empty($data['room_id'])) {
+        if (!empty($data['room_id'])) {
             $roomSql = $baseSql . " AND te.room_id = :room_id" . $exclusionSql;
             $roomParams = $params + [':room_id' => $data['room_id']];
             
@@ -769,11 +756,13 @@ class PlanRepository
                 // Verständlichere Meldung:
                 $conflicts[] = "RAUM-KONFLIKT: '{$name}' ist bereits von Klasse {$existingRoomEntry['class_name']} (Lehrer: {$existingRoomEntry['teacher_shortcut']}) belegt.";
             }
-         }
+        }
         
         // 3. Check Class Conflict (class booked for another lesson at the same time)
-         // Nur prüfen, wenn es nicht der Lehrermodus ist (dort ist class_id 0 oder null)
-         if (!empty($data['class_id']) && $data['class_id'] !== '0' && $data['class_id'] !== 0) {
+        // *** KORREKTUR: Entfernt, um parallele Einträge für dieselbe Klasse zu ermöglichen. ***
+        // Der neue UNIQUE KEY in der Datenbank (idx_parallel_entry) verhindert exakte Duplikate.
+        /*
+        if (!empty($data['class_id']) && $data['class_id'] !== '0' && $data['class_id'] !== 0) {
             $classSql = $baseSql . " AND te.class_id = :class_id" . $exclusionSql;
             $classParams = $params + [':class_id' => $data['class_id']];
             if ($excludeEntryId === null) unset($classParams[':exclude_entry_id']);
@@ -784,10 +773,11 @@ class PlanRepository
             $existingClassEntry = $stmtClass->fetch(PDO::FETCH_ASSOC);
 
             if ($existingClassEntry) {
-                 // *** GEÄNDERTE MELDUNG (Benutzerwunsch) ***
-                 $conflicts[] = "KONFLIKT (Slot belegt): Die Klasse {$existingClassEntry['class_name']} hat in diesem Zeitraum bereits Unterricht.";
+                // *** GEÄNDERTE MELDUNG (Benutzerwunsch) ***
+                $conflicts[] = "KONFLIKT (Slot belegt): Die Klasse {$existingClassEntry['class_name']} hat in diesem Zeitraum bereits Unterricht.";
             }
-         }
+        }
+        */
 
         // Throw exception if conflicts found (to be caught by handleApiRequest in saveEntry)
         if (!empty($conflicts)) {
@@ -978,9 +968,9 @@ class PlanRepository
             $this->pdo->rollBack();
             error_log("PlanRepository::createTemplate failed: " . $e->getMessage());
             // Rethrow specific conflict error
-             if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getCode() == 409) {
-                 throw new Exception("Eine Vorlage mit dem Namen '{$name}' existiert bereits.", 409);
-             }
+            if (str_contains($e->getMessage(), 'Duplicate entry') || $e->getCode() == 409) {
+                throw new Exception("Eine Vorlage mit dem Namen '{$name}' existiert bereits.", 409);
+            }
             throw new Exception("Fehler beim Erstellen der Vorlage: " . $e->getMessage());
         }
     }
@@ -1067,9 +1057,9 @@ class PlanRepository
                 $entryClassId = ($entityIdField === 'class_id') ? $entityIdValue : $entry['class_id'];
                 // Stelle sicher, dass eine class_id vorhanden ist, wenn auf Lehrer angewendet wird
                 if ($entityIdField === 'teacher_id' && (empty($entryClassId) || $entryClassId == 0)) {
-                   // Überspringe diesen Eintrag oder wirf einen Fehler, da Lehrer ohne Klasse nicht geplant werden kann
-                   error_log("Template apply skipped: Teacher template entry missing class_id. TemplateEntryID: " . $entry['template_entry_id']);
-                   continue; // Überspringe diesen Eintrag
+                    // Überspringe diesen Eintrag oder wirf einen Fehler, da Lehrer ohne Klasse nicht geplant werden kann
+                    error_log("Template apply skipped: Teacher template entry missing class_id. TemplateEntryID: " . $entry['template_entry_id']);
+                    continue; // Überspringe diesen Eintrag
                 }
 
 
@@ -1284,9 +1274,10 @@ class PlanRepository
             ':day_of_week' => $dayOfWeek,
             ':period_number' => $periodNumber
         ]);
-        $regularEntry = $stmtRegular->fetch(PDO::FETCH_ASSOC);
+        // KORRIGIERT: fetchAll() statt fetch() verwenden, da mehrere Einträge (Kursteilung) möglich sind
+        $regularEntries = $stmtRegular->fetchAll(PDO::FETCH_ASSOC);
 
-        if (!$regularEntry) {
+        if (empty($regularEntries)) {
             // 3. Kein regulärer Unterricht und keine Vertretung -> Freistunde
             return [
                 'status' => 'Freistunde',
@@ -1294,42 +1285,58 @@ class PlanRepository
             ];
         }
 
-        // 4. Regulärer Unterricht ist geplant. PRÜFE, ob DIESE Stunde vertreten wird.
-        $sqlCheckSub = "SELECT s.*, c.class_name, 
-                               os.subject_shortcut as original_subject_shortcut, 
-                               ns.subject_shortcut as new_subject_shortcut, 
-                               nr.room_name as new_room_name
-                        FROM substitutions s
-                        JOIN classes c ON s.class_id = c.class_id
-                        LEFT JOIN subjects os ON s.original_subject_id = os.subject_id
-                        LEFT JOIN subjects ns ON s.new_subject_id = ns.subject_id
-                        LEFT JOIN rooms nr ON s.new_room_id = nr.room_id
-                        WHERE s.date = :date 
-                            AND s.period_number = :period_number
-                            AND s.class_id = :class_id";
-        
-        $stmtCheckSub = $this->pdo->prepare($sqlCheckSub);
-        $stmtCheckSub->execute([
-            ':date' => $date,
-            ':period_number' => $periodNumber,
-            ':class_id' => $regularEntry['class_id']
-        ]);
-        $substitution = $stmtCheckSub->fetch(PDO::FETCH_ASSOC);
+        // 4. Regulärer Unterricht ist geplant. PRÜFE, ob DIESE Stunde(n) vertreten wird/werden.
+        // Wir müssen für jeden regulären Eintrag prüfen, ob eine Vertretung existiert.
+        foreach ($regularEntries as $index => $regularEntry) {
+            if (empty($regularEntry['class_id'])) {
+                 // Sollte nicht passieren, wenn ein Lehrer zugewiesen ist, aber zur Sicherheit
+                 continue;
+            }
+            
+            $sqlCheckSub = "SELECT s.*, c.class_name, 
+                                os.subject_shortcut as original_subject_shortcut, 
+                                ns.subject_shortcut as new_subject_shortcut, 
+                                nr.room_name as new_room_name
+                            FROM substitutions s
+                            JOIN classes c ON s.class_id = c.class_id
+                            LEFT JOIN subjects os ON s.original_subject_id = os.subject_id
+                            LEFT JOIN subjects ns ON s.new_subject_id = ns.subject_id
+                            LEFT JOIN rooms nr ON s.new_room_id = nr.room_id
+                            WHERE s.date = :date 
+                                AND s.period_number = :period_number
+                                AND s.class_id = :class_id";
+            
+            $stmtCheckSub = $this->pdo->prepare($sqlCheckSub);
+            $stmtCheckSub->execute([
+                ':date' => $date,
+                ':period_number' => $periodNumber,
+                ':class_id' => $regularEntry['class_id']
+            ]);
+            $substitution = $stmtCheckSub->fetch(PDO::FETCH_ASSOC);
 
-        if ($substitution) {
-            // 5. Ja, die Stunde wird vertreten (z.B. Entfall, Raumänderung)
-            // Der Lehrer ist also NICHT im regulären Raum.
-            // Der Status ist der Typ der Vertretung.
-            return [
-                'status' => $substitution['substitution_type'],
-                'data' => $substitution
+            if ($substitution) {
+                // 5. Ja, die Stunde wird vertreten (z.B. Entfall, Raumänderung)
+                // Der Lehrer ist also NICHT im regulären Raum.
+                // Wir speichern dies im $regularEntries Array
+                $regularEntries[$index]['substitution_info'] = $substitution;
+            }
+        }
+        
+        // 6. Daten aufbereiten
+        // Wenn $regularEntries nur einen Eintrag hat und dieser eine Vertretung hat,
+        // geben wir den Status der Vertretung zurück.
+        if (count($regularEntries) === 1 && isset($regularEntries[0]['substitution_info'])) {
+             return [
+                'status' => $regularEntries[0]['substitution_info']['substitution_type'], // z.B. "Entfall"
+                'data' => $regularEntries[0]['substitution_info']
             ];
         }
 
-        // 6. Kein Treffer in Schritt 1 und 5 -> Der Lehrer hält regulären Unterricht.
+        // 7. In allen anderen Fällen (regulärer Unterricht oder mehrere parallele Kurse)
+        // geben wir 'Unterricht' zurück. Das Frontend muss die Einträge (inkl. 'substitution_info') selbst interpretieren.
         return [
             'status' => 'Unterricht',
-            'data' => $regularEntry
+            'data' => $regularEntries // Sende alle regulären Einträge (ggf. mit Vertretungsinfos)
         ];
     }
     
@@ -1344,13 +1351,13 @@ class PlanRepository
         $sqlEntries = "SELECT DISTINCT c.class_id, c.class_name 
                         FROM timetable_entries te
                         JOIN classes c ON te.class_id = c.class_id
-                        WHERE te.teacher_id = :teacher_id";
+                        WHERE te.teacher_id = :teacher_id AND te.class_id IS NOT NULL AND te.class_id != 0";
                         
         // Holt Klassen aus Vertretungen (wo der Lehrer der *neue* Lehrer ist)
         $sqlSubs = "SELECT DISTINCT c.class_id, c.class_name
                     FROM substitutions s
                     JOIN classes c ON s.class_id = c.class_id
-                    WHERE s.new_teacher_id = :teacher_id";
+                    WHERE s.new_teacher_id = :teacher_id AND s.class_id IS NOT NULL AND s.class_id != 0";
 
         try {
             $stmtEntries = $this->pdo->prepare($sqlEntries);

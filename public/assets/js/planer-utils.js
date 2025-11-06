@@ -26,12 +26,12 @@ export function getDateOfISOWeek(week, year) {
 }
 
 /**
- * Berechnet den YYYY-MM-DD Datumsstring für einen Wochentag (1-5) in der aktuell gewählten Woche.
- * @param {number} dayNum - Der Wochentag (1=Mo, 5=Fr).
- * @param {string} year - Das ausgewählte Jahr.
- * @param {string} week - Die ausgewählte Woche.
- * @returns {string} Das Datum im Format YYYY-MM-DD.
- */
+ * Berechnet den YYYY-MM-DD Datumsstring für einen Wochentag (1-5) in der aktuell gewählten Woche.
+ * @param {number} dayNum - Der Wochentag (1=Mo, 5=Fr).
+ * @param {string} year - Das ausgewählte Jahr.
+ * @param {string} week - Die ausgewählte Woche.
+ * @returns {string} Das Datum im Format YYYY-MM-DD.
+A*/
 export function getDateForDayInWeek(dayNum, year, week) {
     const monday = getDateOfISOWeek(week, year);
     const targetDate = new Date(monday.getTime() + (dayNum - 1) * 24 * 60 * 60 * 1000);
@@ -44,16 +44,17 @@ export function getDateForDayInWeek(dayNum, year, week) {
 }
 
 /**
- * Bereinigt einen String für die sichere Anzeige in HTML.
- * @param {*} unsafe - Der Eingabewert.
- * @returns {string} Der bereinigte String.
- */
+ * Bereinigt einen String für die sichere Anzeige in HTML.
+ * @param {*} unsafe - Der Eingabewert.
+Source: 
+ * @returns {string} Der bereinigte String.
+ */
 export function escapeHtml(unsafe) {
     if (!unsafe) return '';
     return String(unsafe)
-         .replace(/&/g, "&amp;")
-         .replace(/</g, "&lt;")
-         .replace(/>/g, "&gt;")
-         .replace(/"/g, "&quot;")
-         .replace(/'/g, "&#039;");
+         .replace(/&/g, "&amp;")
+         .replace(/</g, "&lt;")
+         .replace(/>/g, "&gt;")
+         .replace(/"/g, "&quot;")
+         .replace(/'/g, "&#039;");
 }

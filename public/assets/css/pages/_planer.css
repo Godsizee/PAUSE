@@ -220,230 +220,58 @@
 }
 
 /* --- Timetable Grid --- */
-.timetable-grid {
-    display: grid;
-    grid-template-columns: 100px repeat(5, 1fr);
-    grid-auto-rows: minmax(80px, auto);
-    gap: 5px;
-    background-color: var(--color-border);
-    border: 1px solid var(--color-border);
-    border-radius: 8px;
-    overflow: hidden;
-}
 
-.grid-header {
+/* KORREKTUR: .grid-header auf Tabellen-Header (TH) angepasst */
+.timetable-grid th.grid-header { /* Ziel: <th class="grid-header ..."> */
+    /* display: flex; (Nicht nötig für TH) */
     background-color: var(--color-surface-alt);
     font-weight: bold;
     text-align: center;
     padding: 10px;
-    display: flex;
     justify-content: center;
     align-items: center;
+    vertical-align: middle;
 }
-.dark-mode .grid-header {
+.dark-mode .timetable-grid th.grid-header {
     background-color: var(--color-surface-alt);
 }
 
-
-.grid-header.period-header {
-    grid-column: 1 / 2;
-    font-size: 0.9rem;
-    box-sizing: border-box;
-}
-
-.grid-cell {
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-start;
-    align-items: stretch;
-    gap: 4px;
-    padding: 4px;
-    cursor: pointer;
-    transition: background-color 0.2s ease, transform 0.2s ease; /* Transform hinzugefügt */
-    position: relative;
-    background-color: var(--color-surface);
-}
-.dark-mode .grid-cell {
-    background-color: var(--color-surface);
-}
-
-.cell-entry {
-    background: rgba(255, 255, 255, 0.9);
-    border-radius: 4px;
-    padding: 4px 6px;
-    border: 1px solid var(--color-border);
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    text-align: center;
-    word-break: break-word;
-    flex-grow: 1;
-    height: 100%;
-    box-sizing: border-box;
-    /* Verhindert, dass der Text im Eintrag Dragging auslöst (nur die Zelle soll dragbar sein) */
-    pointer-events: none;
-}
-.dark-mode .cell-entry {
-    background: rgba(40, 48, 54, 0.9);
-    border-color: #444c56;
-}
-
-.grid-cell:hover {
-    background-color: #f1f5f9;
-    transform: scale(1.02); /* Leichter Zoom-Effekt beim Hovern */
-    z-index: 5;
-}
-.dark-mode .grid-cell:hover {
-    background-color: #ffffff1a;
-}
-
-.grid-cell.selected {
-    background-color: rgba(57, 0, 153, 0.1);
-    outline: 2px solid var(--color-primary);
-    outline-offset: -2px;
-    z-index: 10;
-}
-
-/* --- DRAG & DROP STYLES (NEU) --- */
-
-/* Element, das gerade gezogen wird */
-.grid-cell.dragging {
-    opacity: 0.4;
-    transform: scale(0.95);
-    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
-}
-
-/* Alle Zellen, während gezogen wird */
-.timetable-grid.is-dragging .grid-cell {
-    transition: background-color 0.3s ease;
-}
-
-/* Zielzelle, über der geschwebt wird (allgemein) */
-.grid-cell.drop-target {
-    background-color: rgba(57, 0, 153, 0.1); /* Helles Lila */
-    transform: scale(1.03);
-    z-index: 15;
-}
-
-/* Zielzelle, die GÜLTIG ist (kein Konflikt) */
-.grid-cell.drop-target-valid {
-    background-color: rgba(40, 167, 69, 0.15); /* Helles Grün */
-    outline: 2px dashed var(--color-success);
-    outline-offset: -2px;
-}
-
-/* Zielzelle, die UNGÜLTIG ist (Konflikt) */
-.grid-cell.drop-target-invalid {
-    background-color: rgba(255, 0, 84, 0.15); /* Helles Rot */
-    outline: 2px dashed var(--color-danger);
-    outline-offset: -2px;
-}
-/* --- ENDE DRAG & DROP --- */
-
-
-.grid-cell strong { font-size: 1rem; font-weight: 700; }
-.grid-cell span { font-size: 0.8rem; color: var(--color-text-muted); }
-.grid-cell small { font-size: 0.75rem; color: var(--color-text-muted); }
-
-.grid-cell.default-entry { background-color: var(--color-surface-alt); color: var(--color-text-muted); justify-content: center; align-items: center; }
-.dark-mode .grid-cell.default-entry { background-color: var(--color-surface-alt); color: var(--color-text-muted); }
-.grid-cell.default-entry .cell-entry { flex-grow: 0; height: auto; background: transparent; border: none; }
-.grid-cell.default-entry strong, .grid-cell.default-entry span { text-align: center; }
-
-/* Substitution Styles */
-.grid-cell.substitution-Vertretung { background-color: #fff0f1; border-left: 4px solid var(--color-danger); }
-.grid-cell.substitution-Raumänderung { background-color: #fff9e6; border-left: 4px solid var(--color-warning); }
-.grid-cell.substitution-Sonderevent { background-color: #e7f5ff; border-left: 4px solid #007bff; }
-.grid-cell.substitution-Entfall { background-color: #f8f9fa; border-left: 4px solid #6c757d; }
-.grid-cell.substitution-Entfall > .cell-entry { text-decoration: line-through; color: #6c757d; opacity: 0.8; }
-.dark-mode .grid-cell.substitution-Vertretung { background-color: rgba(255, 0, 84, 0.1); }
-.dark-mode .grid-cell.substitution-Raumänderung { background-color: rgba(255, 189, 0, 0.1); }
-.dark-mode .grid-cell.substitution-Sonderevent { background-color: rgba(0, 123, 255, 0.1); }
-.dark-mode .grid-cell.substitution-Entfall { background-color: rgba(108, 117, 125, 0.1); }
-
-
-/* Block Styles */
-.grid-cell.block-start { padding: 0; }
-.grid-cell.block-start .cell-entry { border-radius: 0; border: none; width: 100%; }
-.grid-cell.substitution-Vertretung.block-start,
-.grid-cell.substitution-Raumänderung.block-start,
-.grid-cell.substitution-Sonderevent.block-start,
-.grid-cell.substitution-Entfall.block-start { justify-content: center; align-items: center; }
-.grid-cell.substitution-Vertretung.block-start .cell-entry,
-.grid-cell.substitution-Raumänderung.block-start .cell-entry,
-.grid-cell.substitution-Sonderevent.block-start .cell-entry,
-.grid-cell.substitution-Entfall.block-start .cell-entry { flex-grow: 0; height: auto; width: 90%; border-radius: 4px; border: 1px solid var(--color-border); }
-
-/* KORREKTUR: Styling für Abwesenheits-Warnung (Sichtbarkeit erhöht) */
-.grid-cell.teacher-absent .cell-entry {
-    background-color: rgba(255, 0, 84, 0.05); /* Heller roter Hintergrund */
-    outline: 1px dashed var(--color-danger); /* Dezenterer Rahmen */
-    outline-offset: -1px;
-}
-.dark-mode .grid-cell.teacher-absent .cell-entry {
-    background-color: rgba(255, 0, 84, 0.1); /* Etwas mehr Sichtbarkeit im Dark Mode */
-}
-
-/* KORREKTUR: Den Namen (mainText, oft der Lehrer) rot hervorheben */
-.grid-cell.teacher-absent .cell-entry span {
-    color: var(--color-danger);
-    font-weight: 700; /* Fett hervorheben */
-    background-color: rgba(255, 0, 84, 0.1); /* Leicht roter Hintergrund für den Namen */
-    padding: 0 4px;
-    border-radius: 3px;
-}
-.dark-mode .grid-cell.teacher-absent .cell-entry span {
-     background-color: rgba(255, 0, 84, 0.2);
-     color: #ff8984; /* Helleres Rot im Dark Mode */
-}
-
-small.absence-warning {
-    font-size: 0.7rem !important;
-    font-weight: 700;
-    color: var(--color-danger) !important;
-    margin-top: 2px;
-    line-height: 1.2;
-    display: block;
-    width: 100%;
-    text-align: center;
-}
-/* --- ENDE Abwesenheits-Warnung --- */
+/* KORREKTUR: Alte, falsche Breiten-Definition entfernt (war hier) */
 
 
 /* --- Modal Styles --- */
-.modal-overlay { 
-    position: fixed; 
-    top: 0; 
-    left: 0; 
-    width: 100%; 
-    height: 100%; 
-    background-color: rgba(0, 0, 0, 0.6); 
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
     z-index: 1040; /* Standard-Overlay-Ebene */
-    display: none; 
-    justify-content: center; 
+    display: none;
+    justify-content: center;
     /* KORREKTUR: align-items: center zu flex-start geändert */
-    align-items: flex-start; 
-    opacity: 0; 
-    transition: opacity 0.3s ease; 
+    align-items: flex-start;
+    opacity: 0;
+    transition: opacity 0.3s ease;
     backdrop-filter: blur(5px);
     /* NEU: Padding oben und unten, damit Modal scrollen kann */
     padding: 5vh 0;
     overflow-y: auto; /* Erlaube dem Overlay selbst zu scrollen, falls das Modal + Padding größer als 100vh ist */
 }
 .modal-overlay.visible { display: flex; opacity: 1; }
-.modal-box { 
-    background: var(--color-surface); 
+.modal-box {
+    background: var(--color-surface);
     padding: 25px 30px; /* Reduced padding */
-    border-radius: 12px; 
+    border-radius: 12px;
     width: 90%; /* Width for mobile */
     max-width: 500px; /* Default max-width */
     box-sizing: border-box;
-    max-height: 90vh; /* NEU: Max height (war schon da, aber wird jetzt durch align-items: flex-start wirksam) */
-    overflow-y: auto; /* NEU: Allow modal content to scroll */
-    margin: 0; /* NEU: Entferne potenziellen auto-margin von align-items */
-    display: flex; /* NEU: Flex-Layout für internes Scrolling */
-    flex-direction: column; /* NEU: Inhalt stapeln */
+    max-height: 90vh;
+    overflow-y: auto;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
 }
 .modal-box h2 { margin-top: 0; }
 
@@ -518,19 +346,19 @@ small.absence-warning {
 
 
 /* Container für Formular (Name/Beschreibung) */
-#template-editor-view > div:nth-of-type(2) { 
+#template-editor-view > div:nth-of-type(2) {
     display: flex;
     flex-direction: column; /* Stack on mobile */
-    gap: 15px; 
+    gap: 15px;
     margin-bottom: 15px;
     flex-shrink: 0; /* Verhindert das Schrumpfen des Formulars */
 }
 
 /* Container für das simplifizierte Grid */
 #template-editor-grid-container {
-    margin-top: 15px; 
-    border: 1px solid var(--color-border); 
-    border-radius: 8px; 
+    margin-top: 15px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
     overflow-x: auto; /* KORREKTUR: Ermöglicht horizontales Scrollen auf kleinen Geräten */
     overflow-y: hidden; /* Verhindert doppeltes Scrollen */
     flex-shrink: 1; /* Erlaube dem Grid-Container zu schrumpfen */
@@ -538,13 +366,20 @@ small.absence-warning {
 }
 
 /* Das Grid im Template-Editor selbst */
-.template-editor-grid {
-    /* Stellt sicher, dass das Grid die Basisstile von .timetable-grid erbt */
+/* KORREKTUR: .template-editor-grid ist jetzt eine .timetable-grid (aus JS) */
+.template-editor-grid.timetable-grid {
     min-width: 600px; /* NEU: Stellt sicher, dass das Grid eine Mindestbreite hat und scrollt */
-    grid-template-columns: 80px repeat(5, 1fr); /* Schmalere Zeitspalte */
-    grid-auto-rows: minmax(60px, auto); /* Kleinere Mindesthöhe für Zeilen */
+    /* grid-auto-rows: minmax(60px, auto); (wird von .grid-cell min-height gesteuert) */
     gap: 2px; /* Dünnere Linien */
 }
+/* KORREKTUR: Überschreibe Spalten für Template-Grid (schmalere Zeitspalte) */
+.template-editor-grid.timetable-grid {
+    /* grid-template-columns: 80px repeat(5, 1fr); (Nicht mehr nötig, wird von TH-Breite gesteuert) */
+}
+.template-editor-grid.timetable-grid th.time-col {
+    width: 100px; /* KORREKTUR: auf 100px gesetzt (war 80px) */
+}
+
 
 /* Kleinere Schriftarten speziell im Template-Grid */
 .template-editor-grid .grid-header {
@@ -556,14 +391,20 @@ small.absence-warning {
     font-size: 0.7rem;
     line-height: 1.2;
     padding: 4px 2px;
+    grid-column: 1; /* Stellt sicher, dass es in Spalte 1 bleibt */
 }
-.template-editor-grid .grid-cell .cell-entry {
+.template-editor-grid .grid-cell {
+    min-height: 60px; /* Kleinere Mindesthöhe für Zeilen */
+}
+
+/* KORREKTUR: Ziele auf .planner-entry innerhalb des Template-Grids */
+.template-editor-grid .grid-cell .planner-entry {
     padding: 2px 4px;
-    min-height: 50px;
+    min-height: 50px; /* Kleinere Höhe für Einträge */
 }
-.template-editor-grid .grid-cell strong { font-size: 0.8rem; }
-.template-editor-grid .grid-cell span { font-size: 0.7rem; }
-.template-editor-grid .grid-cell small { font-size: 0.65rem; }
+.template-editor-grid .grid-cell .entry-subject { font-size: 0.8rem; }
+.template-editor-grid .grid-cell .entry-main { font-size: 0.7rem; }
+.template-editor-grid .grid-cell .entry-room { font-size: 0.65rem; }
 
 
 /* Media Query für kleinere Bildschirme */
@@ -697,7 +538,7 @@ small.absence-warning {
     outline: 2px solid var(--color-surface);
 }
 .dark-mode .fc-event.absence-selected {
-     outline-color: var(--color-surface);
+    outline-color: var(--color-surface);
 }
 
 .fc-event-main {
@@ -723,16 +564,16 @@ small.absence-warning {
     #absence-form.absence-form-layout #absence-teacher-group,
     #absence-form.absence-form-layout #absence-comment-group {
         /* Nimmt 2 Spalten ein, wenn das Grid mehr als 2 Spalten hat */
-        grid-column: span 2; 
+        grid-column: span 2;
     }
     
     /* Auf sehr breiten Bildschirmen (mehr als 4 Items nebeneinander) */
     @media (min-width: 1200px) {
         #absence-form.absence-form-layout #absence-teacher-group {
-             grid-column: span 3;
+            grid-column: span 3;
         }
         #absence-form.absence-form-layout #absence-comment-group {
-             grid-column: span 2;
+            grid-column: span 2;
         }
     }
 }
@@ -766,4 +607,330 @@ small.absence-warning {
     #absence-form.absence-form-layout #absence-comment-group {
         grid-column: 1 / -1; /* Volle Breite (Standard) */
     }
+} 
+
+/* =========================================
+NEUE REGELN FÜR PARALLELE EINTRÄGE (wiederhergestellt von _dashboard.css)
+=========================================
+*/
+
+/* KORREKTUR: Ersetzt die 'display: table' Stile durch 'display: grid' */
+.timetable-grid {
+    display: grid;
+    grid-template-columns: 80px repeat(5, 1fr); /* 80px Zeitspalte */
+    grid-auto-rows: minmax(70px, auto); /* Mindesthöhe 70px */
+    gap: 3px; /* Simuliert die dünnen Linien */
+    background-color: var(--color-border);
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    overflow: hidden;
+    /* table-layout: fixed; (Nur für Tabellen) */
+}
+.timetable-grid thead, .timetable-grid tbody, .timetable-grid tr {
+    /* (Diese sind nur für Tabellen) */
+    display: contents; /* Wichtig für CSS-Grid-Layout in einer Tabelle (obwohl wir jetzt divs verwenden) */
+}
+/* .timetable-grid th, .timetable-grid td { (wird durch .grid-header / .grid-cell ersetzt) } */
+
+
+/* Container für mehrere Einträge pro Zelle */
+.cell-entries-container {
+    display: flex;
+    flex-direction: column;
+    gap: 2px; /* Kleiner Abstand zwischen parallelen Einträgen */
+    height: 100%;
+    width: 100%;
+    padding: 2px; /* Etwas Innenabstand in der Zelle */
+    box-sizing: border-box;
+}
+
+/* Anpassung der Zellen (TD), damit der Container die volle Höhe nutzt */
+.timetable-grid .grid-cell {
+    /* (Dieser Stil wird jetzt vom Dashboard übernommen) */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+    align-items: stretch;
+    gap: 3px; /* Abstand zwischen parallelen Einträgen */
+    padding: 3px;
+    position: relative;
+    background-color: var(--color-surface);
+    cursor: pointer;
+    transition: background-color 0.2s ease, transform 0.2s ease;
+    min-height: 70px; /* Synchronisiert mit grid-auto-rows */
+}
+.dark-mode .timetable-grid .grid-cell {
+    background-color: var(--color-surface);
+}
+
+/* Weist Zellen den korrekten Spalten zu (CSS-Grid-Logik) */
+.grid-cell[data-day="1"] { grid-column: 2; }
+.grid-cell[data-day="2"] { grid-column: 3; }
+.grid-cell[data-day="3"] { grid-column: 4; }
+.grid-cell[data-day="4"] { grid-column: 5; }
+.grid-cell[data-day="5"] { grid-column: 6; }
+
+
+.timetable-grid .grid-cell:hover {
+    background-color: #f1f5f9;
+    z-index: 5;
+}
+.dark-mode .timetable-grid .grid-cell:hover {
+    background-color: #ffffff1a;
+}
+
+.timetable-grid .grid-cell.selected {
+    background-color: rgba(57, 0, 153, 0.1);
+    outline: 2px solid var(--color-primary);
+    outline-offset: -2px;
+    z-index: 10;
+}
+
+/* KORREKTUR: Drag-Stile auf .grid-cell (TD) anwenden */
+.timetable-grid .grid-cell.dragging {
+    opacity: 0.4;
+    transform: scale(0.95);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+.timetable-grid.is-dragging .grid-cell {
+    transition: background-color 0.3s ease;
+}
+.grid-cell.drop-target {
+    background-color: rgba(57, 0, 153, 0.1);
+    transform: scale(1.03);
+    z-index: 15;
+}
+.grid-cell.drop-target-valid {
+    background-color: rgba(40, 167, 69, 0.15);
+    outline: 2px dashed var(--color-success);
+    outline-offset: -2px;
+}
+.grid-cell.drop-target-invalid {
+    background-color: rgba(255, 0, 84, 0.15);
+    outline: 2px dashed var(--color-danger);
+    outline-offset: -2px;
+}
+/* Ende Drag-Stile */
+
+
+/* (Dieser Stil ist jetzt obsolet, da .planner-entry das Styling übernimmt) */
+.cell-entry {
+    /* KORREKTUR: pointer-events: none; (damit die Zelle das Drag-Event empfängt) */
+    pointer-events: none;
+}
+
+/* KORREKTUR: .grid-cell strong/span/small (Globale Zellenschriftarten) */
+.grid-cell strong { font-size: 0.9rem; font-weight: 700; }
+.grid-cell span { font-size: 0.75rem; color: var(--color-text-muted); }
+.grid-cell small { font-size: 0.7rem; color: var(--color-text-muted); }
+.grid-cell small.entry-room { color: #555; }
+.dark-mode .grid-cell small.entry-room { color: #bbb; }
+.grid-cell small.entry-comment { display: block; font-style: italic; color: var(--color-secondary); margin-top: 2px; line-height: 1.2; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 90%; }
+/* --- Ende Grid-Stile --- */
+
+
+/* Styling für die einzelnen Eintrag-Divs (Planner-Entry) */
+.planner-entry {
+    border-radius: 4px;
+    padding: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    border: 1px solid var(--color-border);
+    transition: all 0.2s ease;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex-shrink: 0;
+    line-height: 1.3;
+    /* KORREKTUR: Stile aus .cell-entry übernommen */
+    background: rgba(255, 255, 255, 0.9);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    word-break: break-word;
+}
+.dark-mode .planner-entry {
+    background: rgba(40, 48, 54, 0.9);
+    border-color: #444c56;
+}
+
+
+.planner-entry:hover {
+    transform: translateY(-1px) scale(1.03); /* Leichter Hover-Effekt auf dem Eintrag selbst */
+    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+    z-index: 10;
+    position: relative; /* Für z-index */
+}
+
+/* Styling für reguläre Einträge (timetable-entry) */
+.timetable-entry {
+    background-color: var(--color-surface-alt);
+    border-left: 3px solid var(--color-primary);
+}
+.dark-mode .timetable-entry {
+    background-color: var(--color-surface);
+}
+
+.planner-entry .entry-line {
+    text-align: left; /* Linksbündig für bessere Lesbarkeit */
+    padding: 0 2px; /* Kleiner horizontaler Abstand */
+    pointer-events: none; /* Stellt sicher, dass Klicks/Drag zur Zelle durchgehen */
+}
+
+.planner-entry .entry-subject {
+    font-weight: 600;
+    color: var(--color-text);
+    font-size: 0.9rem; /* War .grid-cell strong */
+}
+.planner-entry .entry-main {
+    color: var(--color-text-muted);
+    font-size: 0.75rem; /* War .grid-cell span */
+}
+.planner-entry .entry-room {
+    font-size: 0.75rem; /* Angepasst */
+    color: var(--color-secondary);
+}
+.planner-entry .sub-type {
+    font-weight: 700;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    margin-bottom: 2px;
+}
+
+
+/* Styling für Vertretungen (substitution-entry) */
+.substitution-entry {
+    background-color: var(--color-surface-alt);
+}
+.dark-mode .substitution-entry {
+    background-color: var(--color-surface);
+}
+
+.planner-entry.vertretung {
+    border-left: 3px solid var(--color-danger);
+    background-color: #fff0f1;
+}
+.planner-entry.vertretung .sub-type {
+    color: var(--color-danger);
+}
+.dark-mode .planner-entry.vertretung {
+    background-color: rgba(255, 0, 84, 0.1);
+}
+
+.planner-entry.raumänderung {
+    border-left: 3px solid var(--color-warning);
+    background-color: #fff9e6;
+}
+.planner-entry.raumänderung .sub-type {
+    color: var(--color-warning);
+}
+.dark-mode .planner-entry.raumänderung {
+    background-color: rgba(255, 189, 0, 0.1);
+}
+
+.planner-entry.entfall {
+    border-left: 3px solid var(--color-text-muted);
+    background-color: var(--color-surface-alt);
+    opacity: 0.7;
+    text-decoration: line-through;
+}
+.planner-entry.entfall .sub-type {
+    color: var(--color-text-muted);
+}
+.dark-mode .planner-entry.entfall {
+    background-color: var(--color-surface);
+}
+
+
+.planner-entry.sonderevent {
+    border-left: 3px solid var(--color-primary);
+    background-color: #e7f5ff; /* Hellblau von Dashboard */
+}
+.planner-entry.sonderevent .sub-type {
+    color: var(--color-primary);
+}
+.dark-mode .planner-entry.sonderevent {
+    background-color: rgba(0, 123, 255, 0.1);
+}
+
+/* KORREKTUR: Styling für Abwesenheits-Warnung (zielt auf .planner-entry) */
+.planner-entry.is-absent {
+    background-color: rgba(255, 0, 84, 0.05);
+    outline: 1px dashed var(--color-danger);
+    outline-offset: -1px;
+}
+.dark-mode .planner-entry.is-absent {
+    background-color: rgba(255, 0, 84, 0.1);
+}
+.planner-entry.is-absent .entry-main { /* Zielt auf Lehrer/Klasse */
+    color: var(--color-danger);
+    font-weight: 700;
+    background-color: rgba(255, 0, 84, 0.1);
+    padding: 0 4px;
+    border-radius: 3px;
+}
+.dark-mode .planner-entry.is-absent .entry-main {
+    background-color: rgba(255, 0, 84, 0.2);
+    color: #ff8984;
+}
+.planner-entry .absence-warning { /* .absence-warning ist jetzt ein Kind von .planner-entry */
+    font-size: 0.7rem !important;
+    font-weight: 700;
+    color: var(--color-danger) !important;
+    display: block;
+}
+
+
+/* KORREKTUR: Leere Zellen (TDs) und FU-Zellen */
+.timetable-grid .grid-cell.is-empty {
+    background-color: var(--color-surface-alt);
+    cursor: cell;
+}
+.dark-mode .timetable-grid .grid-cell.is-empty {
+    background-color: var(--color-background); /* Dunkler für leer */
+}
+
+/* FU-Stil (Zelle, die einen default-entry enthält) */
+.timetable-grid .grid-cell.default-entry {
+    background-color: #f8f9fa;
+    color: #6c757d;
+    justify-content: center;
+    align-items: center;
+    cursor: default;
+}
+.dark-mode .timetable-grid .grid-cell.default-entry {
+    background-color: #21262d;
+    color: var(--color-text-muted);
+}
+/* Der .planner-entry div innerhalb einer FU-Zelle */
+.grid-cell.default-entry .planner-entry {
+    background: transparent;
+    border: none;
+    flex-grow: 0;
+    height: auto;
+    min-height: 0;
+    pointer-events: none;
+}
+.grid-cell.default-entry .planner-entry .entry-subject {
+    color: inherit;
+    font-size: 0.9rem;
+}
+
+
+.timetable-grid .grid-cell.is-empty:hover {
+    background-color: #f1f5f9;
+    transform: none;
+}
+.dark-mode .timetable-grid .grid-cell.is-empty:hover {
+    background-color: #ffffff1a;
+}
+/* KORREKTUR: Hover für FU-Zellen */
+.timetable-grid .grid-cell.default-entry:hover {
+    background-color: #f8f9fa;
+    transform: none;
+}
+.dark-mode .timetable-grid .grid-cell.default-entry:hover {
+    background-color: #21262d;
 }

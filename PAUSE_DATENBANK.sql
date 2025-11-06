@@ -432,6 +432,7 @@ INSERT INTO `subjects` (`subject_shortcut`, `subject_name`) VALUES
 ('BWSS', 'Betriebswirtschaftliche Standardsoftware'),
 ('INC', 'Bewerbungstraining'), -- KORRIGIERT
 ('CAD', 'CAD')
+('SGL', 'Selbstgesteuertes Lernen')
 ON DUPLICATE KEY UPDATE
     subject_name = VALUES(subject_name);
 
