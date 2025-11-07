@@ -81,7 +81,7 @@ export function initializeAdminUsers() { // <-- DIESES 'export' HAT GEFEHLT
             const canImpersonate = (user.user_id != currentAdminId); // Admin kann sich nicht selbst imitieren
             const impersonateButton = canImpersonate
                 ? `<button class="btn btn-secondary btn-small impersonate-user-btn" data-id="${user.user_id}" data-username="${escapeHtml(user.username)}" data-role="${escapeHtml(user.role)}" title="Anmelden als ${escapeHtml(user.username)}">
-                     Anmelden als
+                       Anmelden als
                    </button>`
                 : ``; // Zeige keinen Button an, wenn man es selbst ist
 
@@ -102,12 +102,19 @@ export function initializeAdminUsers() { // <-- DIESES 'export' HAT GEFEHLT
         }).join('') : '<tr><td colspan="6">Keine Benutzer gefunden.</td></tr>'; // KORREKTUR: colspan="6"
     };
 
-
     const populateSelects = (data) => {
         allData = data; // Store for later use
         roleSelect.innerHTML = data.roles.map(r => `<option value="${r}">${r.charAt(0).toUpperCase() + r.slice(1)}</option>`).join('');
-        classSelect.innerHTML = '<option value="">Keine Klasse</option>' + data.classes.map(c => `<option value="${c.class_id}">${c.class_name}</option>`).join('');
-        teacherSelect.innerHTML = '<option value="">Kein Lehrerprofil</option>' + data.teachers.map(t => `<option value="${t.teacher_id}">${t.first_name} ${t.last_name} (${t.teacher_shortcut})</option>`).join('');
+        
+        // KORRIGIERT: Zeigt jetzt ID und Name an (und nutzt escapeHtml)
+        classSelect.innerHTML = '<option value="">Keine Klasse</option>' + data.classes.map(c => 
+            `<option value="${c.class_id}">${c.class_id} - ${escapeHtml(c.class_name)}</option>`
+        ).join('');
+        
+        // KORRIGIERT: Zeigt jetzt Name und Kürzel an (und nutzt escapeHtml)
+        teacherSelect.innerHTML = '<option value="">Kein Lehrerprofil</option>' + data.teachers.map(t => 
+            `<option value="${t.teacher_id}">${escapeHtml(t.first_name)} ${escapeHtml(t.last_name)} (${escapeHtml(t.teacher_shortcut)})</option>`
+        ).join('');
     };
 
     const loadUsers = async () => {

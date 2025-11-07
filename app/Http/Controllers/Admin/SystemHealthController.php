@@ -1,99 +1,80 @@
 <?php
 // app/Http/Controllers/Admin/SystemHealthController.php
-// KORRIGIERT: Utils::renderView() entfernt und durch manuelles Laden der View (include_once) ersetzt.
+
+// MODIFIZIERT:
+// 1. SystemHealthService importiert und im Konstruktor instanziiert.
+// 2. Alle privaten Logik-Methoden (checkDbStatus, checkExtensions, checkDirectories) wurden entfernt.
+// 3. index() ruft jetzt $this->healthService->performSystemChecks() und
+//    $this->healthService->getSystemInfo() auf, um die Daten zu laden.
+// 4. Die Datenstruktur, die an die View übergeben wird, wurde angepasst,
+//    um dem neuen Service-Format zu entsprechen.
 
 namespace App\Http\Controllers\Admin;
 
 use App\Core\Security;
 use App\Core\Utils;
 use App\Core\Database;
+use App\Services\SystemHealthService; // NEU: Service importieren
 
 class SystemHealthController
 {
+    private SystemHealthService $healthService; // NEU
+
     public function __construct()
     {
         Security::requireRole('admin');
+        $this->healthService = new SystemHealthService(); // NEU
     }
 
     /**
      * Zeigt die System-Status-Seite an.
+     * MODIFIZIERT: Ruft Daten vom SystemHealthService ab.
      */
     public function index()
     {
-        // KORREKTUR: Globale Variablen setzen, die vom Header benötigt werden
         global $config;
         $config = Database::getConfig();
         $page_title = 'System-Status';
         $body_class = 'admin-dashboard-body';
 
-        // $data wird an die View übergeben
+        // NEU: Daten vom Service abrufen
+        $systemInfo = $this->healthService->getSystemInfo();
+        $systemChecks = $this->healthService->performSystemChecks();
+
+        // Daten für die View aufbereiten
         $data = [
-            'phpVersion' => phpversion(),
-            'serverSoftware' => $_SERVER['SERVER_SOFTWARE'] ?? 'N/A',
-            'dbStatus' => $this->checkDbStatus(),
-            'extensions' => $this->checkExtensions(),
-            'directoryStatus' => $this->checkDirectories(),
+            'phpVersion' => $systemInfo['php'],
+            'serverSoftware' => $systemInfo['webserver'],
+            'dbStatus' => $systemChecks['database'], // 'database' enthält jetzt [status, message, tooltip]
+            'extensions' => [], // Wird unten gefüllt
+            'directoryStatus' => [], // Wird unten gefüllt
             'settings' => Utils::getSettings() // Für den Wartungsmodus-Status
         ];
 
-        // KORREKTUR: View direkt laden (diese lädt dann Header/Footer)
+        // Daten aus den Checks extrahieren, damit die View (system_health.php)
+        // weiterhin funktioniert, ohne die View ändern zu müssen.
+        foreach ($systemChecks as $key => $check) {
+            if (str_starts_with($key, 'ext_')) {
+                $extName = str_replace('ext_', '', $key);
+                $data['extensions'][$extName] = $check['status']; // true oder false
+            }
+            if (str_starts_with($key, 'uploads/') || $key === 'cache') {
+                 $data['directoryStatus'][$key] = [
+                    'status' => $check['status'] ? 'ok' : 'error',
+                    'message' => $check['message']
+                 ];
+            }
+        }
+
+        // KORREKTUR: View direkt laden
         include_once dirname(__DIR__, 4) . '/pages/admin/system_health.php';
     }
 
     /**
-     * Prüft die Datenbankverbindung.
+     * VERALTET: Alle privaten Check-Methoden wurden entfernt.
+     * Die Logik befindet sich jetzt im SystemHealthService.
      */
-    private function checkDbStatus(): array
-    {
-        try {
-            $pdo = Database::getInstance();
-            $pdo->query("SELECT 1");
-            return ['status' => 'ok', 'message' => 'Verbunden'];
-        } catch (\PDOException $e) {
-            // Zeige nicht die volle Fehlermeldung, um DB-Details zu schützen
-            return ['status' => 'error', 'message' => 'Nicht verbunden'];
-        }
-    }
-
-    /**
-     * Prüft wichtige PHP-Extensions.
-     */
-    private function checkExtensions(): array
-    {
-        $required = ['pdo_mysql', 'openssl', 'gd', 'mbstring', 'json', 'intl'];
-        $status = [];
-
-        foreach ($required as $ext) {
-            $status[$ext] = extension_loaded($ext);
-        }
-        return $status;
-    }
-
-    /**
-     * Prüft, ob wichtige Verzeichnisse beschreibbar sind.
-     */
-    private function checkDirectories(): array
-    {
-        $projectRoot = dirname(__DIR__, 4);
-        $dirs = [
-            'cache' => $projectRoot . '/cache',
-            'uploads/announcements' => $projectRoot . '/public/uploads/announcements',
-            'uploads/branding' => $projectRoot . '/public/uploads/branding'
-        ];
-        
-        $status = [];
-        foreach ($dirs as $name => $path) {
-            $isDir = is_dir($path);
-            $isWritable = $isDir && is_writable($path);
-            
-            if (!$isDir) {
-                $status[$name] = ['status' => 'error', 'message' => 'Verzeichnis existiert nicht'];
-            } elseif (!$isWritable) {
-                $status[$name] = ['status' => 'error', 'message' => 'Nicht beschreibbar'];
-            } else {
-                $status[$name] = ['status' => 'ok', 'message' => 'OK'];
-            }
-        }
-        return $status;
-    }
+    // private function checkDbStatus(): array { ... } // (ENTFERNT)
+    // private function checkExtensions(): array { ... } // (ENTFERNT)
+    // private function checkDirectories(): array { ... } // (ENTFERNT)
 }

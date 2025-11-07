@@ -8,7 +8,7 @@ import { showToast, showConfirm } from './notifications.js'; // Import notificat
  */
 function escapeHtml(unsafe) {
     if (unsafe === null || typeof unsafe === 'undefined') return '';
-  	 return String(unsafe)
+       return String(unsafe)
           .replace(/&/g, "&amp;")
           .replace(/</g, "&lt;")
           .replace(/>/g, "&gt;")
@@ -258,20 +258,17 @@ export function initializeAdminAnnouncements() {
                  handleTargetSelectionChange(); // Update UI based on loaded data
              } else if (userRole === 'lehrer') {
                   targetClassSelect.value = announcementData.class_id || '';
-Dienstag
              }
 
 
             // Handle attachment display
             if (attachmentInput) {
                  attachmentInput.value = '';
-Dienstag
                  if (announcementData.file_path) {
                      const fileUrl = `${window.APP_CONFIG.baseUrl}/${announcementData.file_path.startsWith('/') ? announcementData.file_path.substring(1) : announcementData.file_path}`;
                      currentAttachmentInfo.style.display = 'block';
                      currentAttachmentLink.href = fileUrl;
                      currentAttachmentLink.textContent = announcementData.file_path.split('/').pop(); // Show filename
-                tuesday
                      removeAttachmentCheckbox.checked = false;
                  } else {
                      currentAttachmentInfo.style.display = 'none';
@@ -287,14 +284,12 @@ Dienstag
         if (target.classList.contains('delete-announcement')) {
             // Permission check already done in PHP for button visibility, but double-check here if needed
             const canModify = in_array(userRole, ['admin', 'planer']) || (userRole === 'lehrer' && announcementData.user_id == window.APP_CONFIG.userId); // Assuming userId is available globally
-Dienstag
              if (!canModify) return;
 
             // Use imported function directly
             if (await showConfirm('Ankündigung löschen', `Sind Sie sicher, dass Sie "${escapeHtml(announcementData.title)}" löschen möchten? Zugehörige Dateien werden ebenfalls entfernt.`)) {
-                const deleteFormData = new FormData();
+           const deleteFormData = new FormData();
                 deleteFormData.append('announcement_id', id);
-Dienstag
                  // Add CSRF token manually if not already added by apiFetch for FormData
                  if (!deleteFormData.has('_csrf_token') && csrfTokenInput) {
                      deleteFormData.append('_csrf_token', csrfTokenInput.value);
@@ -303,21 +298,18 @@ Dienstag
 
                 try {
                     const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/announcements/delete`, { method: 'POST', body: deleteFormData });
-Dienstag
                     if(response.success) {
                         // Use imported function directly
                         showToast(response.message, 'success');
                         row.remove(); // Remove row directly
-          tuesday
                          // Optionally check if table is now empty
                         if (tableBody.rows.length === 0) {
                             // Display a message or reload
                              window.location.reload(); // Reload if empty for simplicity
-A
                         }
                     }
                      // Error handled by apiFetch
-d
+
                 } catch(error) {
                      console.error("Delete error:", error);
                      // Maybe refresh CSRF token
@@ -338,6 +330,3 @@ function in_array(needle, haystack) {
     return haystack.indexOf(needle) > -1;
 }
 
-// Ensure APP_CONFIG includes userId if needed for client-side permission checks
-// Example: Add this to pages/partials/header.php within the script tag
-// userId: <?php echo $_SESSION['user_id'] ?? 'null'; ?>,

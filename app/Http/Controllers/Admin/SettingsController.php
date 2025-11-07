@@ -1,32 +1,46 @@
 <?php
 // app/Http/Controllers/Admin/SettingsController.php
-// MODIFIZIERT: clearCacheApi() leert jetzt App\Core\Cache UND Utils::clearSettingsCache()
+
+// MODIFIZIZERT:
+// 1. FileUploadService importiert und im Konstruktor injiziert.
+// 2. Die private Methode handleFileUpload() wurde entfernt.
+// 3. Die save()-Methode verwendet jetzt $this->fileUploadService->handleUpload()
+//    und $this->fileUploadService->deleteFile().
+// 4. Die Logik zum Entfernen von Dateien wurde in den Callback des Traits verschoben.
 
 namespace App\Http\Controllers\Admin;
 
 use App\Core\Security;
 use App\Core\Database;
 use App\Core\Utils;
-use App\Core\Cache; // NEU: Importiert die App-Cache-Klasse
+use App\Core\Cache;
 use App\Repositories\SettingsRepository;
 use App\Services\AuditLogger;
+use App\Http\Traits\ApiHandlerTrait;
+use App\Services\FileUploadService; // NEU: FileUploadService importieren
 use Exception;
 use PDO;
 
 class SettingsController
 {
+    use ApiHandlerTrait;
+
     private SettingsRepository $settingsRepo;
-    private string $uploadDir; // NEU: Upload-Verzeichnis
+    private FileUploadService $fileUploadService; // NEU
+
+    // VERALTET: $uploadDir wird nicht mehr benötigt, da der Service den Pfad kennt.
+    // private string $uploadDir; 
 
     public function __construct()
     {
         $this->settingsRepo = new SettingsRepository();
-        // NEU: Definiere das Upload-Verzeichnis für Branding
-        $this->uploadDir = dirname(__DIR__, 4) . '/public/uploads/branding/';
+        $this->fileUploadService = new FileUploadService(); // NEU: Service instanziieren
+        // $this->uploadDir = ... (ENTFERNT)
     }
 
     /**
      * Zeigt die Hauptseite für die Anwendungseinstellungen an.
+     * MODIFIZIERT: Erstellt das Verzeichnis nicht mehr hier, der Service macht das bei Bedarf.
      */
     public function index()
     {
@@ -37,96 +51,66 @@ class SettingsController
         $page_title = 'Anwendungs-Einstellungen';
         $body_class = 'admin-dashboard-body';
 
-        // Aktuelle Einstellungen laden, um sie im Formular anzuzeigen
         $currentSettings = Utils::getSettings();
 
-        // NEU: Sicherstellen, dass das Upload-Verzeichnis existiert
-        if (!is_dir($this->uploadDir)) {
-            @mkdir($this->uploadDir, 0775, true);
-        }
+        // Verzeichnis-Erstellung entfernt - der FileUploadService kümmert sich darum.
 
-        Security::getCsrfToken(); // Stellt sicher, dass ein Token für das Formular existiert
-
+        Security::getCsrfToken();
         include_once dirname(__DIR__, 4) . '/pages/admin/settings.php';
     }
 
     /**
-     * NEU: Verarbeitet Datei-Uploads für Logos/Favicons.
-     * @param string $fileKey Der Schlüssel in der $_FILES-Variable (z.B. 'site_logo')
-     * @param array $allowedMimes Erlaubte MIME-Typen (Format: ['mime/type' => 'extension'])
-     * @param string|null $currentPath Der Pfad zur aktuell gespeicherten Datei (zum Löschen)
-     * @return string|null Der relative Pfad zur neuen Datei oder $currentPath, wenn nichts hochgeladen wurde
-     * @throws Exception
+     * VERALTET: Die Methode private function handleFileUpload() wurde entfernt.
+     * Die Logik befindet sich jetzt im FileUploadService.
      */
-    private function handleFileUpload(string $fileKey, array $allowedMimes, ?string $currentPath): ?string
-    {
-        // Prüfen, ob eine neue Datei hochgeladen wurde
-        if (isset($_FILES[$fileKey]) && $_FILES[$fileKey]['error'] === UPLOAD_ERR_OK) {
-            $file = $_FILES[$fileKey];
-            $fileType = mime_content_type($file['tmp_name']);
-
-            // KORREKTUR: Prüfe, ob der fileType ein SCHLÜSSEL im $allowedMimes Array ist
-            if (!array_key_exists($fileType, $allowedMimes)) {
-                throw new Exception("Ungültiger Dateityp für '{$fileKey}'. Erlaubt: " . implode(', ', array_keys($allowedMimes)), 400);
-            }
-
-            // Sicherstellen, dass das Verzeichnis existiert
-            if (!is_dir($this->uploadDir) && !@mkdir($this->uploadDir, 0775, true)) {
-                throw new Exception("Upload-Verzeichnis konnte nicht erstellt werden.", 500);
-            }
-            if (!is_writable($this->uploadDir)) {
-                throw new Exception("Upload-Verzeichnis ist nicht beschreibbar.", 500);
-            }
-
-            // Sicherer Dateiname
-            // KORREKTUR: Verwende die Extension aus dem $allowedMimes Array, nicht aus dem Originalnamen
-            $extension = $allowedMimes[$fileType]; 
-            $fileName = $fileKey . '_' . uniqid() . '.' . $extension;
-            $targetPath = $this->uploadDir . $fileName;
-
-            if (move_uploaded_file($file['tmp_name'], $targetPath)) {
-                // Erfolgreich hochgeladen, lösche die alte Datei (falls vorhanden)
-                if ($currentPath && file_exists(dirname(__DIR__, 4) . '/public/' . $currentPath)) {
-                    @unlink(dirname(__DIR__, 4) . '/public/' . $currentPath);
-                }
-                // Gebe den *relativen* Pfad für die DB zurück
-                return 'uploads/branding/' . $fileName;
-            } else {
-                throw new Exception("Fehler beim Verschieben der hochgeladenen Datei.", 500);
-            }
-        }
-
-        // Prüfen, ob die aktuelle Datei entfernt werden soll
-        if (isset($_POST['remove_' . $fileKey]) && $_POST['remove_' . $fileKey] === '1') {
-            if ($currentPath && file_exists(dirname(__DIR__, 4) . '/public/' . $currentPath)) {
-                @unlink(dirname(__DIR__, 4) . '/public/' . $currentPath);
-            }
-            return null; // Pfad aus der DB entfernen
-        }
-
-        // Keine Änderung, behalte den alten Pfad
-        return $currentPath;
-    }
+    // private function handleFileUpload(...) { ... } // (ENTFERNT)
 
 
     /**
      * API: Speichert die Anwendungseinstellungen.
+     * MODIFIZIERT: Nutzt jetzt FileUploadService.
      */
     public function save()
     {
-        Security::requireRole('admin');
-        header('Content-Type: application/json');
+        $this->handleApiRequest(function($data) { // $data ist $_POST
 
-        try {
-            Security::verifyCsrfToken();
-
-            // Daten kommen jetzt als Form-Daten (multipart/form-data)
-            $data = $_POST;
-            
-            // Hole aktuelle Einstellungen (wichtig für Datei-Pfade)
             $oldSettings = Utils::getSettings();
+            $logoPath = $oldSettings['site_logo_path'] ?? null;
+            $faviconPath = $oldSettings['site_favicon_path'] ?? null;
 
-            // --- Validierungen ---
+            // --- Datei-Uploads / Löschungen ---
+            
+            // 1. Logo verarbeiten
+            if (isset($_FILES['site_logo']) && $_FILES['site_logo']['error'] === UPLOAD_ERR_OK) {
+                // Wenn ein neues Logo hochgeladen wird, altes zuerst löschen
+                $this->fileUploadService->deleteFile($logoPath);
+                // Neues Logo hochladen und Pfad speichern
+                $logoPath = $this->fileUploadService->handleUpload(
+                    'site_logo',
+                    'branding',
+                    ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/svg+xml' => 'svg', 'image/gif' => 'gif']
+                );
+            } elseif (isset($data['remove_site_logo']) && $data['remove_site_logo'] === '1') {
+                // Logo entfernen (ohne neues hochzuladen)
+                $this->fileUploadService->deleteFile($logoPath);
+                $logoPath = null;
+            }
+            // (Wenn nichts passiert, bleibt $logoPath der alte Pfad)
+
+            // 2. Favicon verarbeiten
+            if (isset($_FILES['site_favicon']) && $_FILES['site_favicon']['error'] === UPLOAD_ERR_OK) {
+                $this->fileUploadService->deleteFile($faviconPath);
+                $faviconPath = $this->fileUploadService->handleUpload(
+                    'site_favicon',
+                    'branding',
+                    ['image/x-icon' => 'ico', 'image/png' => 'png', 'image/svg+xml' => 'svg']
+                );
+            } elseif (isset($data['remove_site_favicon']) && $data['remove_site_favicon'] === '1') {
+                $this->fileUploadService->deleteFile($faviconPath);
+                $faviconPath = null;
+            }
+
+            // --- Validierungen (unverändert) ---
             $startHour = filter_var($data['default_start_hour'] ?? 1, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]);
             $endHour = filter_var($data['default_end_hour'] ?? 10, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 12]]);
             if ($startHour === false || $endHour === false || $startHour >= $endHour) {
@@ -145,27 +129,10 @@ class SettingsController
             if ($icalWeeksFuture === false) {
                 throw new Exception("Ungültige Anzahl an iCal-Wochen (1-52).", 400);
             }
-            // NEU: Bereinige IP-Whitelist-String
             $whitelistIPs = $data['maintenance_whitelist_ips'] ?? '';
-            // Entferne alles außer IPs, Kommas, Doppelpunkte (IPv6) und Punkte
             $whitelistIPs = preg_replace('/[^0-9a-fA-F:.,\s]/', '', $whitelistIPs);
-            // Ersetze Leerzeichen und Zeilenumbrüche durch Kommas und entferne doppelte Kommas
             $whitelistIPs = preg_replace('/[\s,]+/', ',', $whitelistIPs);
             $whitelistIPs = trim($whitelistIPs, ',');
-
-
-            // --- Datei-Uploads verarbeiten ---
-            $logoPath = $this->handleFileUpload(
-                'site_logo',
-                ['image/png' => 'png', 'image/jpeg' => 'jpg', 'image/svg+xml' => 'svg', 'image/gif' => 'gif'],
-                $oldSettings['site_logo_path'] ?? null
-            );
-
-            $faviconPath = $this->handleFileUpload(
-                'site_favicon',
-                ['image/x-icon' => 'ico', 'image/png' => 'png', 'image/svg+xml' => 'svg'],
-                $oldSettings['site_favicon_path'] ?? null
-            );
 
 
             // Aufbereitete Einstellungen für das Repository
@@ -173,40 +140,40 @@ class SettingsController
                 'site_title' => trim($data['site_title'] ?? 'PAUSE Portal'),
                 'maintenance_mode' => (isset($data['maintenance_mode']) && ($data['maintenance_mode'] === 'on' || $data['maintenance_mode'] === '1')) ? '1' : '0',
                 'maintenance_message' => trim($data['maintenance_message'] ?? ''),
-                'maintenance_whitelist_ips' => $whitelistIPs, // NEU
+                'maintenance_whitelist_ips' => $whitelistIPs,
                 'default_start_hour' => $startHour,
                 'default_end_hour' => $endHour,
                 'max_login_attempts' => $maxAttempts,
                 'lockout_minutes' => $lockoutMinutes,
-                'site_logo_path' => $logoPath,
-                'site_favicon_path' => $faviconPath,
+                'site_logo_path' => $logoPath, // NEU: Der aktualisierte Pfad
+                'site_favicon_path' => $faviconPath, // NEU: Der aktualisierte Pfad
                 'default_theme' => $defaultTheme,
                 'ical_enabled' => (isset($data['ical_enabled']) && ($data['ical_enabled'] === 'on' || $data['ical_enabled'] === '1')) ? '1' : '0',
                 'ical_weeks_future' => $icalWeeksFuture,
                 'pdf_footer_text' => trim($data['pdf_footer_text'] ?? ''),
-                // NEU: Community Board
                 'community_board_enabled' => (isset($data['community_board_enabled']) && ($data['community_board_enabled'] === 'on' || $data['community_board_enabled'] === '1')) ? '1' : '0',
             ];
 
-
+            // Speichern
             $this->settingsRepo->saveSettings($settingsToSave);
+
+            // Cache in Utils löschen (wichtig!)
+            Utils::clearSettingsCache();
 
             // Protokollierung - logge nur geänderte Werte
             $changedDetails = [];
             foreach ($settingsToSave as $key => $newValue) {
                 $oldValue = $oldSettings[$key];
                 
-                // Konvertiere boolesche Werte für den Vergleich
-                if ($key === 'maintenance_mode' || $key === 'ical_enabled' || $key === 'community_board_enabled') { // NEU: community_board_enabled
-                    $newValueForCompare = $newValue === '1'; // bool
+                if (is_bool($oldValue)) {
+                     $newValueForCompare = $newValue === '1';
                 } else if (is_numeric($newValue)) {
-                    $newValueForCompare = (int)$newValue;
+                     $newValueForCompare = (int)$newValue;
                 } else {
-                    $newValueForCompare = $newValue;
+                     $newValueForCompare = $newValue;
                 }
 
                 if ($newValueForCompare != $oldValue) {
-                    // Spezielle Behandlung für Logo/Favicon, um nur "geändert" statt Pfad zu loggen
                     if ($key === 'site_logo_path' || $key === 'site_favicon_path') {
                         if ($newValue === null && $oldValue !== null) $changedDetails[$key] = 'entfernt';
                         elseif ($newValue !== null && $oldValue === null) $changedDetails[$key] = 'hinzugefügt';
@@ -219,84 +186,60 @@ class SettingsController
             $changedDetails = array_filter($changedDetails);
 
 
-            if (!empty($changedDetails)) {
-                AuditLogger::log(
-                    'update_settings',
-                    'system',
-                    null,
-                    $changedDetails
-                );
-            }
+            // Rückgabe-Array für den ApiHandlerTrait
+            return [
+                'json_response' => [
+                    'success' => true,
+                    'message' => 'Einstellungen erfolgreich gespeichert.',
+                    'data' => [ 
+                        'site_logo_path' => $logoPath,
+                        'site_favicon_path' => $faviconPath,
+                        'default_theme' => $defaultTheme
+                    ]
+                ],
+                'log_action' => 'update_settings',
+                'log_target_type' => 'system',
+                'log_details' => $changedDetails ?: null
+            ];
 
-            // Cache in Utils löschen
-            Utils::clearSettingsCache();
-
-            echo json_encode([
-                'success' => true,
-                'message' => 'Einstellungen erfolgreich gespeichert.',
-                'data' => [
-                    'site_logo_path' => $logoPath,
-                    'site_favicon_path' => $faviconPath,
-                    'default_theme' => $defaultTheme
-                ]
-            ]);
-
-        } catch (Exception $e) {
-            $statusCode = $e->getCode();
-            if (!is_int($statusCode) || $statusCode < 400 || $statusCode > 599) {
-                $statusCode = 400;
-            }
-            http_response_code($statusCode);
-            error_log("Settings save error: " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
+        }, [
+            'inputType' => 'form',
+            'checkRole' => 'admin'
+        ]);
     }
 
+
     /**
-     * NEU: API-Endpunkt zum Leeren des Caches.
-     * MODIFIZIERT: Leert jetzt BEIDE Caches (Settings + App).
+     * API-Endpunkt zum Leeren des Caches.
+     * (Unverändert)
      */
     public function clearCacheApi()
     {
-        Security::requireRole('admin');
-        header('Content-Type: application/json');
+        $this->handleApiRequest(function($data) {
 
-        try {
-            // CSRF-Token aus dem Header holen (von apiFetch gesendet) oder aus POST
-            Security::verifyCsrfToken(); 
-
-            // 1. Führe die Cache-Löschung für Einstellungen durch (aus Utils)
             Utils::clearSettingsCache();
             $settingsMessage = 'Einstellungen-Cache geleert.';
 
-            // 2. Führe die App-Cache-Löschung durch (aus Core\Cache)
-            $appCacheResult = Cache::clearAll(); // Ruft die neue Methode auf
+            $appCacheResult = Cache::clearAll();
             $appMessage = $appCacheResult['message'];
 
             if (!$appCacheResult['success']) {
-                // Wenn der App-Cache fehlschlägt, werfe einen Fehler
-                throw new Exception("Fehler beim Leeren des App-Caches: " . $appMessage);
+                throw new Exception("Fehler beim Leeren des App-Caches: " . $appMessage, 500);
             }
-            
-            // Protokolliere die Aktion (jetzt für alle Caches)
-            AuditLogger::log(
-                'clear_cache',
-                'system',
-                null,
-                ['cache_type' => 'all_application_caches'] // Aktualisierter Log-Text
-            );
 
-            echo json_encode([
-                'success' => true,
-                'message' => "Erfolgreich! $settingsMessage. $appMessage" // Kombinierte Nachricht
-            ]);
+            return [
+                'json_response' => [
+                    'success' => true,
+                    'message' => "Erfolgreich! $settingsMessage. $appMessage"
+                ],
+                'log_action' => 'clear_cache',
+                'log_target_type' => 'system',
+                'log_details' => ['cache_type' => 'all_application_caches']
+            ];
 
-        } catch (Exception $e) {
-            http_response_code(str_contains($e->getMessage(), 'CSRF') ? 403 : 500);
-            error_log("Cache clear error: " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
+        }, [
+            'inputType' => 'form',
+            'checkRole' => 'admin'
+        ]);
     }
 }

@@ -1,6 +1,7 @@
 <?php
 // config/routes.php
 
+
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Admin\DashboardController as AdminDashboardController;
@@ -8,11 +9,12 @@ use App\Http\Controllers\Admin\StammdatenController;
 use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\AnnouncementController as AdminAnnouncementController;
 use App\Http\Controllers\Admin\CsvTemplateController;
-use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Admin\AuditLogController; 
 use App\Http\Controllers\Admin\SettingsController;
 use App\Http\Controllers\Admin\CommunityController as AdminCommunityController;
+use App\Http\Controllers\Admin\SystemHealthController; 
 use App\Http\Controllers\Planer\PlanController;
-use App\Http\Controllers\Planer\AbsenceController; // NEU HINZUGEFÜGT
+use App\Http\Controllers\Planer\AbsenceController;
 use App\Http\Controllers\AnnouncementController;
 use App\Http\Controllers\CommunityController;
 use App\Http\Controllers\IcalController;
@@ -21,15 +23,20 @@ use App\Http\Controllers\TeacherController;
 use App\Http\Controllers\AcademicEventController;
 use App\Http\Controllers\SingleEventController;
 
+
 return [
+
     // --- Authentifizierung ---
     '#^login$#' => [AuthController::class, 'showLogin'],
     '#^login/process$#' => [AuthController::class, 'handleLogin'],
     '#^logout$#' => [AuthController::class, 'logout'],
+    '#^logout/revert$#' => [AuthController::class, 'revertImpersonation'], // NEU: Route für Impersonation-Reset
+
 
     // --- Dashboard (Startseite nach Login) ---
     '#^$#' => [DashboardController::class, 'index'], // Root maps to dashboard
     '#^dashboard$#' => [DashboardController::class, 'index'],
+
 
     // --- Admin Bereich ---
     '#^admin/dashboard$#' => [AdminDashboardController::class, 'index'],
@@ -40,11 +47,13 @@ return [
     '#^admin/audit-logs$#' => [AuditLogController::class, 'index'], 
     '#^admin/settings$#' => [SettingsController::class, 'index'], 
     '#^admin/community-moderation$#' => [AdminCommunityController::class, 'index'],
+    '#^admin/system-health$#' => [SystemHealthController::class, 'index'], // NEU: Route hinzugefügt
 
 
     // --- Planer Bereich ---
     '#^planer/dashboard$#' => [PlanController::class, 'index'],
-    '#^planer/absences$#' => [AbsenceController::class, 'index'], // NEU HINZUGEFÜGT
+    '#^planer/absences$#' => [AbsenceController::class, 'index'],
+
 
     // --- iCal Feed ---
     '#^ical/([a-f0-9]{64})$#' => [IcalController::class, 'generateFeed'],
@@ -52,8 +61,10 @@ return [
     // --- Einzel-Event ICS Download ---
     '#^ics/event/(\w+)/(\d+)$#' => [SingleEventController::class, 'generateIcs'],
 
+
     // --- PDF Export ---
     '#^pdf/timetable/(\d{4})/(\d{1,2})$#' => [PdfController::class, 'generateTimetablePdf'],
+
 
     // --- API Routes for Stammdaten ---
     '#^api/admin/subjects$#' => [StammdatenController::class, 'getSubjects'],
@@ -73,21 +84,24 @@ return [
     '#^api/admin/classes/update$#' => [StammdatenController::class, 'updateClass'],
     '#^api/admin/classes/delete$#' => [StammdatenController::class, 'deleteClass'],
 
+
     // --- API Routes for Users ---
     '#^api/admin/users$#' => [UserController::class, 'getUsers'],
     '#^api/admin/users/create$#' => [UserController::class, 'createUser'],
     '#^api/admin/users/update$#' => [UserController::class, 'updateUser'],
     '#^api/admin/users/delete$#' => [UserController::class, 'deleteUser'],
     '#^api/admin/users/import$#' => [UserController::class, 'importUsers'],
+    '#^api/admin/users/impersonate$#' => [UserController::class, 'impersonateUserApi'],
+
 
     // --- API Routes for Admin ---
     '#^api/admin/audit-logs$#' => [AuditLogController::class, 'getLogsApi'],
     '#^api/admin/settings/save$#' => [SettingsController::class, 'save'],
     '#^api/admin/cache/clear$#' => [SettingsController::class, 'clearCacheApi'], 
     '#^api/admin/community/approve$#' => [CommunityController::class, 'approvePostApi'],
-    // 'rejectPostApi' (alt) wird durch 'deletePostApi' ersetzt, da Admins/Schüler jetzt löschen
-    '#^api/admin/community/reject$#' => [CommunityController::class, 'rejectPostApi'], // Wird jetzt auf 'rejected' setzen
-    '#^api/admin/community/delete$#' => [CommunityController::class, 'deletePostApi'], // NEU: Admin löscht freigegebenen Post
+    '#^api/admin/community/reject$#' => [CommunityController::class, 'rejectPostApi'],
+    '#^api/admin/community/delete$#' => [CommunityController::class, 'deletePostApi'],
+
 
 
     // --- API Routes for Planer ---
@@ -108,22 +122,24 @@ return [
     '#^api/planer/templates/(\d+)$#' => [PlanController::class, 'getTemplateDetails'],
     '#^api/planer/templates/save$#' => [PlanController::class, 'saveTemplateDetails'],
 
-    // --- NEU: API Routes for Absences ---
+
+    // --- API Routes for Absences ---
     '#^api/planer/absences$#' => [AbsenceController::class, 'getAbsencesApi'],
     '#^api/planer/absences/save$#' => [AbsenceController::class, 'saveAbsenceApi'],
     '#^api/planer/absences/delete$#' => [AbsenceController::class, 'deleteAbsenceApi'],
+
 
     // --- API Routes for Announcements (General API) ---
     '#^api/announcements$#' => [AnnouncementController::class, 'getAnnouncements'],
     '#^api/announcements/create$#' => [AnnouncementController::class, 'createAnnouncement'],
     '#^api/announcements/delete$#' => [AnnouncementController::class, 'deleteAnnouncement'],
 
+
     // --- API Route for User Dashboards ---
     '#^api/dashboard/weekly-data$#' => [DashboardController::class, 'getWeeklyData'],
-    // NEU: API Route für Notizen
     '#^api/student/note/save$#' => [DashboardController::class, 'saveNoteApi'],
-    // NEU: API Route für Schüler-Events (Aufgaben/Klausuren)
-    '#^api/student/events$#' => [AcademicEventController::class, 'getForStudent'], // KORRIGIERT
+    '#^api/student/events$#' => [AcademicEventController::class, 'getForStudent'],
+
 
     // --- API Routes for Teacher Cockpit ---
     '#^api/teacher/search-colleagues$#' => [TeacherController::class, 'searchColleaguesApi'], 
@@ -133,10 +149,10 @@ return [
     '#^api/teacher/prerequisites$#' => [TeacherController::class, 'getPrerequisitesApi'],
     
     // --- API Routes für Aufgaben/Klausuren (Lehrer) ---
-    // KORRIGIERT: Verweist auf die korrekten Methoden in AcademicEventController (Turn 6)
     '#^api/teacher/events$#' => [AcademicEventController::class, 'getForTeacher'], // GET
     '#^api/teacher/events/create$#' => [AcademicEventController::class, 'createOrUpdate'], // POST
     '#^api/teacher/events/delete$#' => [AcademicEventController::class, 'delete'], // POST
+
 
     // --- API Routes für Sprechstunden ---
     '#^api/teacher/office-hours$#' => [TeacherController::class, 'getOfficeHoursApi'], 

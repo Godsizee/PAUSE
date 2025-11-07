@@ -1,14 +1,24 @@
 <?php
 // app/Http/Controllers/AcademicEventController.php
 
+// MODIFIZIERT:
+// 1. ApiHandlerTrait importiert und verwendet.
+// 2. getForStudent (GET) nutzt handleApiRequest('inputType' => 'get').
+// 3. getForTeacher (GET) nutzt handleApiRequest('inputType' => 'get').
+// 4. createOrUpdate (JSON) nutzt handleApiRequest('inputType' => 'json').
+// 5. delete (JSON) nutzt handleApiRequest('inputType' => 'json').
+// 6. Alle manuellen try/catch, header(), json_decode(), json_encode() und Security-Checks
+//    wurden aus den API-Methoden entfernt und in den Trait-Callback verschoben.
+
 namespace App\Http\Controllers;
 
 use App\Core\Database;
 use App\Core\Security;
 use App\Repositories\AcademicEventRepository;
 use App\Repositories\UserRepository;
-use App\Repositories\StammdatenRepository; // NEU: Für Fächer etc. im Formular
-use App\Services\AuditLogger;
+use App\Repositories\StammdatenRepository;
+use App\Services\AuditLogger; // Import bleibt (wird vom Trait genutzt)
+use App\Http\Traits\ApiHandlerTrait; // NEU: Trait importieren
 use Exception;
 use PDO;
 use DateTime;
@@ -16,29 +26,30 @@ use DateTimeZone;
 
 class AcademicEventController
 {
+    // NEU: Trait für API-Behandlung einbinden
+    use ApiHandlerTrait;
+
     private PDO $pdo;
     private AcademicEventRepository $eventRepo;
     private UserRepository $userRepo;
-    private StammdatenRepository $stammdatenRepo; // NEU
+    private StammdatenRepository $stammdatenRepo;
 
     public function __construct()
     {
         $this->pdo = Database::getInstance();
-        // KORREKTUR: Die $pdo-Instanz muss an die Repositories übergeben werden
         $this->eventRepo = new AcademicEventRepository($this->pdo);
         $this->userRepo = new UserRepository($this->pdo);
-        $this->stammdatenRepo = new StammdatenRepository($this->pdo); 
+        $this->stammdatenRepo = new StammdatenRepository($this->pdo);
     }
 
     /**
      * API: Holt Events für den eingeloggten Schüler für eine bestimmte Woche.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_GET.
      */
     public function getForStudent()
     {
-        Security::requireRole('schueler');
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist $_GET
+            
             $userId = $_SESSION['user_id'];
             $user = $this->userRepo->findById($userId);
             if (!$user || !$user['class_id']) {
@@ -46,8 +57,8 @@ class AcademicEventController
             }
             $classId = $user['class_id'];
 
-            $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
-            $week = filter_input(INPUT_GET, 'week', FILTER_VALIDATE_INT);
+            $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
+            $week = filter_var($data['week'] ?? null, FILTER_VALIDATE_INT);
 
             if (!$year || !$week) {
                  $today = new DateTime('now', new DateTimeZone('Europe/Berlin'));
@@ -57,74 +68,63 @@ class AcademicEventController
 
             $events = $this->eventRepo->getEventsForClassByWeek($classId, $year, $week);
 
-            echo json_encode(['success' => true, 'data' => $events]);
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'data' => $events]
+            ];
 
-        } catch (Exception $e) {
-            $code = $e->getCode() === 400 ? 400 : 500;
-            http_response_code($code);
-            error_log("API Error (getForStudent): " . $e->getMessage()); // Log detailed error
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Laden der Termine: ' . $e->getMessage()]);
-        }
-        exit();
+        }, [
+            'inputType' => 'get',
+            'checkRole' => 'schueler'
+        ]);
     }
 
     /**
-     * API: Holt Events, die vom eingeloggten Lehrer erstellt wurden (für die nächsten 14 Tage).
+     * API: Holt Events, die vom eingeloggten Lehrer erstellt wurden.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_GET.
      */
     public function getForTeacher()
     {
-        Security::requireRole('lehrer');
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist $_GET
+            
             $userId = $_SESSION['user_id'];
-            // Kein zusätzlicher User-Check nötig, da requireRole prüft
             $daysInFuture = 14; // Standardmäßig die nächsten 14 Tage
 
             $events = $this->eventRepo->getEventsByTeacher($userId, $daysInFuture);
 
-            echo json_encode(['success' => true, 'data' => $events]);
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'data' => $events]
+            ];
 
-        } catch (Exception $e) {
-            http_response_code(500);
-            error_log("API Error (getForTeacher): " . $e->getMessage()); // Log detailed error
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Laden Ihrer Einträge: ' . $e->getMessage()]);
-        }
-        exit();
+        }, [
+            'inputType' => 'get',
+            'checkRole' => 'lehrer'
+        ]);
     }
 
     /**
      * API: Erstellt oder aktualisiert ein Event (Aufgabe/Klausur/Info).
-     * Nur für Lehrer.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function createOrUpdate()
     {
-        Security::requireRole('lehrer');
-        Security::verifyCsrfToken();
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $userId = $_SESSION['user_id'];
-            $user = $this->userRepo->findById($userId); // Hole Lehrerdaten für teacher_id
+            $user = $this->userRepo->findById($userId);
             if (!$user || !$user['teacher_id']) {
                 throw new Exception("Lehrerprofil nicht gefunden.", 403);
             }
             $teacherId = $user['teacher_id']; // teacher_id aus teachers Tabelle
 
-            $data = json_decode(file_get_contents('php://input'), true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new Exception("Ungültige Daten (JSON) empfangen.", 400);
-            }
-
             // Validierung der Eingaben
-            $eventId = filter_var($data['event_id'] ?? null, FILTER_VALIDATE_INT) ?: null; // Optional für Update
+            $eventId = filter_var($data['event_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
             $classId = filter_var($data['class_id'] ?? null, FILTER_VALIDATE_INT);
-            $subjectId = filter_var($data['subject_id'] ?? null, FILTER_VALIDATE_INT) ?: null; // Optional
+            $subjectId = filter_var($data['subject_id'] ?? null, FILTER_VALIDATE_INT) ?: null;
             $eventType = $data['event_type'] ?? null;
             $title = trim($data['title'] ?? '');
             $dueDate = $data['due_date'] ?? null;
-            // KORREKTUR: period_number entfernt
-            // $period = filter_var($data['period_number'] ?? null, FILTER_VALIDATE_INT) ?: null; // Optional
             $description = isset($data['description']) ? trim($data['description']) : null;
 
             if (!$classId || !$eventType || empty($title) || !$dueDate || !in_array($eventType, ['aufgabe', 'klausur', 'info'])) {
@@ -134,15 +134,15 @@ class AcademicEventController
                  throw new Exception("Ungültiges Datumsformat. Bitte YYYY-MM-DD verwenden.", 400);
             }
 
-            // Berechtigungsprüfung: Darf der Lehrer für diese Klasse/Datum erstellen?
+            // Berechtigungsprüfung
             if (!$this->eventRepo->checkTeacherAuthorization($teacherId, $classId, $dueDate)) {
                  error_log("Hinweis: Lehrer {$userId} erstellt Event für Klasse {$classId} an Datum {$dueDate} ohne expliziten Unterrichtsnachweis.");
             }
 
-            // KORREKTUR: Parameter $period entfernt
+            // Speichern
             $savedEvent = $this->eventRepo->saveEvent(
                 $eventId,
-                $userId, // Wichtig: Die user_id des Lehrers, nicht die teacher_id
+                $userId, // Wichtig: Die user_id des Lehrers
                 $classId,
                 $subjectId,
                 $eventType,
@@ -151,45 +151,42 @@ class AcademicEventController
                 $description
             );
 
-            // Logging
-            $action = $eventId ? 'update_event' : 'create_event';
-            AuditLogger::log($action, 'academic_event', $savedEvent['event_id'], [
+            // Log-Details
+            $logDetails = [
                 'type' => $eventType,
                 'title' => $title,
                 'class_id' => $classId,
                 'due_date' => $dueDate
-            ]);
+            ];
+            
+            // Rückgabe für Trait
+            return [
+                'json_response' => [
+                    'success' => true,
+                    'message' => 'Eintrag erfolgreich ' . ($eventId ? 'aktualisiert' : 'erstellt') . '.',
+                    'data' => $savedEvent
+                ],
+                'log_action' => $eventId ? 'update_event' : 'create_event',
+                'log_target_type' => 'academic_event',
+                'log_target_id' => $savedEvent['event_id'],
+                'log_details' => $logDetails
+            ];
 
-
-            echo json_encode([
-                'success' => true,
-                'message' => 'Eintrag erfolgreich ' . ($eventId ? 'aktualisiert' : 'erstellt') . '.',
-                'data' => $savedEvent // Gibt das gespeicherte Event zurück
-            ]);
-
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500;
-            http_response_code($code);
-            error_log("API Error (createOrUpdate Event): " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
+        }, [
+            'inputType' => 'json',
+            'checkRole' => 'lehrer'
+        ]);
     }
 
     /**
      * API: Löscht ein Event.
-     * Nur für den erstellenden Lehrer.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function delete()
     {
-        Security::requireRole('lehrer');
-        Security::verifyCsrfToken();
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $userId = $_SESSION['user_id'];
-
-            $data = json_decode(file_get_contents('php://input'), true);
             $eventId = filter_var($data['event_id'] ?? null, FILTER_VALIDATE_INT);
 
             if (!$eventId) {
@@ -198,33 +195,42 @@ class AcademicEventController
 
             // Hole Event-Details vor dem Löschen für das Logging
             $eventToDelete = $this->eventRepo->getEventById($eventId);
+            if (!$eventToDelete) {
+                // Wenn das Event nicht existiert, RowCount = 0, also behandeln wir es wie einen Fehler
+                throw new Exception("Eintrag nicht gefunden.", 404);
+            }
+            
+            // Berechtigungsprüfung (wird auch im Repository geprüft, aber hier für Log-Details)
+            if ($eventToDelete['user_id'] != $userId) {
+                 throw new Exception("Sie sind nicht berechtigt, diesen Eintrag zu löschen.", 403);
+            }
 
             $success = $this->eventRepo->deleteEvent($eventId, $userId);
-
-            if ($success) {
-                AuditLogger::log('delete_event', 'academic_event', $eventId, [
-                     'title' => $eventToDelete['title'] ?? 'N/A',
-                     'type' => $eventToDelete['event_type'] ?? 'N/A',
-                     'class_id' => $eventToDelete['class_id'] ?? 'N/A',
-                     'due_date' => $eventToDelete['due_date'] ?? 'N/A'
-                 ]);
-                echo json_encode(['success' => true, 'message' => 'Eintrag erfolgreich gelöscht.']);
-            } else {
-                throw new Exception("Eintrag konnte nicht gelöscht werden (nicht gefunden oder keine Berechtigung).", 404);
+            if (!$success) {
+                // Sollte durch die Prüfungen oben nicht passieren
+                throw new Exception("Eintrag konnte nicht gelöscht werden.", 500);
             }
 
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500;
-             // Spezifische Behandlung für 403 oder 404 aus dem Repository
-            if (str_contains($e->getMessage(), 'Berechtigung') || str_contains($e->getMessage(), 'Authorization')) {
-                $code = 403;
-            } elseif (str_contains($e->getMessage(), 'gefunden') || str_contains($e->getMessage(), 'found')) {
-                $code = 404;
-            }
-            http_response_code($code);
-            error_log("API Error (delete Event): " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
+            // Log-Details
+            $logDetails = [
+                 'title' => $eventToDelete['title'] ?? 'N/A',
+                 'type' => $eventToDelete['event_type'] ?? 'N/A',
+                 'class_id' => $eventToDelete['class_id'] ?? 'N/A',
+                 'due_date' => $eventToDelete['due_date'] ?? 'N/A'
+            ];
+
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'message' => 'Eintrag erfolgreich gelöscht.'],
+                'log_action' => 'delete_event',
+                'log_target_type' => 'academic_event',
+                'log_target_id' => $eventId,
+                'log_details' => $logDetails
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => 'lehrer'
+        ]);
     }
 }

@@ -1,33 +1,51 @@
 <?php
 // app/Http/Controllers/Planer/PlanController.php
+
+// MODIFIZIERT:
+// 1. ApiHandlerTrait importiert und verwendet.
+// 2. Die lokale Implementierung von handleApiRequest() wurde entfernt.
+// 3. Alle API-Methoden (getTimetableData, saveEntry, deleteEntry, etc.) wurden
+//    vollständig refaktorisiert, um die Trait-Methode zu nutzen.
+// 4. 'inputType' => 'get' für Lesezugriffe, 'inputType' => 'json' für Schreibzugriffe.
+// 5. Alle Callbacks geben jetzt das vom Trait erwartete Array-Format zurück.
+// 6. TeacherAbsenceRepository-Import und -Nutzung bleiben erhalten.
+
 namespace App\Http\Controllers\Planer;
 
 use App\Core\Security;
 use App\Core\Database;
 use App\Repositories\PlanRepository;
 use App\Repositories\StammdatenRepository;
-use App\Repositories\TeacherAbsenceRepository; // NEU: Import
+use App\Repositories\TeacherAbsenceRepository;
+use App\Services\AuditLogger; // Import bleibt (wird vom Trait genutzt)
+use App\Http\Traits\ApiHandlerTrait; // NEU: Trait importieren
 use Exception;
 use PDO;
 use DateTime;
-use DateTimeZone; // Added explicit use
-use App\Services\AuditLogger; // NEU: AuditLogger importieren
+use DateTimeZone;
 
 class PlanController
 {
+    // NEU: Trait für API-Behandlung einbinden
+    use ApiHandlerTrait;
+
     private PDO $pdo;
     private PlanRepository $planRepository;
-    private StammdatenRepository $stammdatenRepository; // <-- Deklaration
+    private StammdatenRepository $stammdatenRepository;
     private TeacherAbsenceRepository $absenceRepo;
 
     public function __construct()
     {
         $this->pdo = Database::getInstance();
         $this->planRepository = new PlanRepository($this->pdo);
-        $this->stammdatenRepository = new StammdatenRepository($this->pdo); // <-- Initialisierung
+        $this->stammdatenRepository = new StammdatenRepository($this->pdo);
         $this->absenceRepo = new TeacherAbsenceRepository($this->pdo);
     }
 
+    /**
+     * Zeigt die Hauptseite des Planer-Dashboards an.
+     * (Unverändert)
+     */
     public function index()
     {
         Security::requireRole(['planer', 'admin']);
@@ -35,95 +53,40 @@ class PlanController
         $config = Database::getConfig();
         $page_title = 'Stundenplan-Verwaltung';
         $body_class = 'planer-dashboard-body';
-        // Ensure CSRF token is generated for forms/API calls on this page
         Security::getCsrfToken();
         include_once dirname(__DIR__, 4) . '/pages/planer/dashboard.php';
     }
 
-     // --- API Helper ---
-     /**
-     * Helper to wrap common API request logic (auth, CSRF, response type, error handling)
-     * @param callable $callback The actual logic to execute (sollte ein Array zurückgeben)
-     * @param string $actionName Der Name der Aktion für das Audit-Log (z.B. 'create_entry')
-     * @param string $targetType Der Typ des Ziels (z.B. 'timetable_entry')
-     * @param bool $isGetRequest Ob es sich um eine GET-Anfrage handelt (Callback macht eigenen Echo)
+    /**
+     * VERALTET: Die Methode private function handleApiRequest() wurde entfernt.
+     * Die Logik befindet sich jetzt im ApiHandlerTrait.
      */
-    private function handleApiRequest(callable $callback, string $actionName = '', string $targetType = '', bool $isGetRequest = false): void
-    {
-        header('Content-Type: application/json'); // Set header early
-        try {
-            if (!$isGetRequest) {
-                Security::verifyCsrfToken(); // Verify CSRF token for non-GET requests
-            }
-            
-            // Callback ausführen
-            $result = $callback(); 
-
-            if ($isGetRequest) {
-                // GET request: Callback kümmert sich selbst um den Echo (wie bei getTimetableData)
-                // $result ist in diesem Fall void
-            } else {
-                // POST/Modifying request: Callback hat Daten zurückgegeben
-                // Aktion protokollieren
-                if ($actionName) {
-                    AuditLogger::log(
-                        $actionName,
-                        $targetType,
-                        $result['log_target_id'] ?? null, // Spezifischer Schlüssel für die ID
-                        $result['log_details'] ?? null    // Spezifischer Schlüssel für Details
-                    );
-                }
-
-                // JSON-Antwort aus dem Ergebnis senden
-                echo json_encode($result['json_response'], JSON_THROW_ON_ERROR);
-            }
-
-        } catch (Exception $e) {
-            // Determine appropriate status code
-            // *** UPDATED: Handle conflict exception (409) specifically ***
-            $statusCode = 400; // Default Bad Request
-            if (str_contains($e->getMessage(), 'CSRF')) {
-                $statusCode = 403; // Forbidden
-            } elseif (str_contains($e->getMessage(), 'KONFLIKT') || str_contains($e->getMessage(), 'Konflikt')) {
-                $statusCode = 409; // Conflict
-            } elseif (str_contains($e->getMessage(), 'existiert bereits')) { // Spezifischer Fehler für Vorlagenname
-                $statusCode = 409; // Conflict
-            }
-            
-            http_response_code($statusCode);
-            
-            echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_THROW_ON_ERROR);
-        }
-        exit();
-    }
+    // private function handleApiRequest(...) { ... } // (ENTFERNT)
 
 
     /**
      * API: Holt Stundenplan-Daten für den Planer (Klassen ODER Lehrer).
-     * Inklusive Stammdaten und Veröffentlichungsstatus. (GET request - no CSRF needed)
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_GET.
      */
     public function getTimetableData()
     {
-        Security::requireRole(['planer', 'admin']);
-        // Definiere Callback innerhalb der Methode, um auf $this zuzugreifen
-        $callback = function() {
-             $classId = filter_input(INPUT_GET, 'class_id', FILTER_VALIDATE_INT);
-             $teacherId = filter_input(INPUT_GET, 'teacher_id', FILTER_VALIDATE_INT);
-             $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
-             $calendarWeek = filter_input(INPUT_GET, 'week', FILTER_VALIDATE_INT);
-             $date = $_GET['date'] ?? null; // For daily substitution display in planner
+        $this->handleApiRequest(function($data) { // $data ist $_GET
+            
+             $classId = filter_var($data['class_id'] ?? null, FILTER_VALIDATE_INT);
+             $teacherId = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
+             $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
+             $calendarWeek = filter_var($data['week'] ?? null, FILTER_VALIDATE_INT);
+             $date = $data['date'] ?? null;
 
              if ($date && (DateTime::createFromFormat('Y-m-d', $date) === false)) {
-                 throw new Exception("Ungültiges Datumsformat. Bitte YYYY-MM-DD verwenden.");
+                 throw new Exception("Ungültiges Datumsformat. Bitte YYYY-MM-DD verwenden.", 400);
              }
 
-             // Fetch base data (classes, teachers, etc.) only if needed or if no specific plan is requested
              $baseData = [];
-             $absencesData = []; // NEU: Abwesenheiten initialisieren
+             $absencesData = [];
              
-             // KORREKTUR: Lade Stammdaten + Abwesenheiten (für Initial-Load)
+             // Initial-Load (Stammdaten)
              if (!$classId && !$teacherId && !$year && !$calendarWeek) { 
-                 // KORREKTUR: Verwende $this->stammdatenRepository statt $this->stammdatenRepo
                  $baseData = [
                      'classes' => $this->stammdatenRepository->getClasses(),
                      'teachers' => $this->stammdatenRepository->getTeachers(),
@@ -131,19 +94,18 @@ class PlanController
                      'rooms' => $this->stammdatenRepository->getRooms(),
                      'templates' => $this->planRepository->getTemplates(), 
                  ];
-                 // Lade Abwesenheiten für die nächsten Monate (z.B.)
                  $today = new DateTime('now', new DateTimeZone('Europe/Berlin'));
                  $startDate = $today->format('Y-m-01');
                  $endDate = $today->modify('+3 months')->format('Y-m-t');
                  $absencesData = $this->absenceRepo->getAbsencesForDateRange($startDate, $endDate);
-                 $baseData['absences'] = $absencesData; // Füge Abwesenheiten zu Stammdaten hinzu
+                 $baseData['absences'] = $absencesData;
              }
 
              $timetable = [];
              $substitutions = [];
-             $publishStatus = ['student' => false, 'teacher' => false]; // Default
+             $publishStatus = ['student' => false, 'teacher' => false];
 
-             // If a specific entity (class or teacher) is selected and year/week are provided
+             // Daten für eine spezifische Woche/Entität laden
              if (($classId || $teacherId) && $year && $calendarWeek) {
                  $publishStatus = $this->planRepository->getPublishStatus($year, $calendarWeek);
 
@@ -155,16 +117,16 @@ class PlanController
                      $substitutions = $this->planRepository->getSubstitutionsForTeacherWeekAsPlaner($teacherId, $year, $calendarWeek);
                  }
                  
-                 // NEU: Lade Abwesenheiten für die ausgewählte Woche
+                 // Abwesenheiten für die ausgewählte Woche
                  $dto = new DateTime();
                  $dto->setISODate($year, $calendarWeek, 1);
                  $startDate = $dto->format('Y-m-d');
-                 $dto->setISODate($year, $calendarWeek, 7); // Bis Sonntag
+                 $dto->setISODate($year, $calendarWeek, 7);
                  $endDate = $dto->format('Y-m-d');
                  $absencesData = $this->absenceRepo->getAbsencesForDateRange($startDate, $endDate);
 
              } elseif (($classId || $teacherId) && (!$year || !$calendarWeek)) {
-                 // Fallback to current week if year/week are missing but entity is selected
+                 // Fallback auf aktuelle Woche
                  $today = new DateTime('now', new DateTimeZone('Europe/Berlin'));
                  $year = (int)$today->format('o');
                  $calendarWeek = (int)$today->format('W');
@@ -178,7 +140,6 @@ class PlanController
                      $substitutions = $this->planRepository->getSubstitutionsForTeacherWeekAsPlaner($teacherId, $year, $calendarWeek);
                  }
                  
-                 // NEU: Lade Abwesenheiten auch hier
                  $dto = new DateTime();
                  $dto->setISODate($year, $calendarWeek, 1);
                  $startDate = $dto->format('Y-m-d');
@@ -187,42 +148,59 @@ class PlanController
                  $absencesData = $this->absenceRepo->getAbsencesForDateRange($startDate, $endDate);
              }
 
+            // Rückgabe für Trait (Erfolgsfall)
+            // Der Trait kümmert sich um json_encode()
+            return [
+                'json_response' => ['success' => true, 'data' => array_merge($baseData, [
+                    'timetable' => $timetable,
+                    'substitutions' => $substitutions,
+                    'publishStatus' => $publishStatus,
+                    'absences' => $absencesData
+                ])]
+            ];
 
-             echo json_encode(['success' => true, 'data' => array_merge($baseData, [
-                 'timetable' => $timetable,
-                 'substitutions' => $substitutions,
-                 'publishStatus' => $publishStatus,
-                 'absences' => $absencesData // NEU: Abwesenheiten immer mitsenden
-             ])], JSON_THROW_ON_ERROR);
-        };
-        // Führe den Callback mit dem API Request Handler aus (GET Request)
-        $this->handleApiRequest($callback, '', '', true); // true = $isGetRequest
+        }, [
+            'inputType' => 'get',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
-
-    // --- Methoden zum Speichern/Löschen (POST requests) ---
+    /**
+     * API: Speichert einen regulären Eintrag (oder Block).
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
+     */
     public function saveEntry()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
-            if (!$data) throw new Exception("Ungültige Daten empfangen.");
-            // The createOrUpdateEntry now potentially returns data (like generated block_id)
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
+            if (!$data) throw new Exception("Ungültige Daten empfangen.", 400);
+
+            // Repository wirft Exception bei Konflikt
             $resultData = $this->planRepository->createOrUpdateEntry($data);
             
+            // Rückgabe für Trait
             return [
                 'json_response' => ['success' => true, 'message' => 'Eintrag erfolgreich gespeichert.', 'data' => $resultData],
+                'log_action' => 'save_entry',
+                'log_target_type' => 'timetable_entry',
                 'log_target_id' => $data['entry_id'] ?? $resultData['entry_ids'][0] ?? null,
-                'log_details' => $data // Logge die übermittelten Daten
+                'log_details' => $data
             ];
-        }, 'save_entry', 'timetable_entry');
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
+    /**
+     * API: Löscht einen regulären Eintrag (oder Block).
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
+     */
     public function deleteEntry()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $entryId = $data['entry_id'] ?? null;
             $blockId = $data['block_id'] ?? null;
             $logTargetId = null;
@@ -231,194 +209,242 @@ class PlanController
             if ($blockId) {
                 $this->planRepository->deleteEntryBlock($blockId);
                 $message = 'Block erfolgreich gelöscht.';
-                $logTargetId = $blockId; // Logge die Block-ID
+                $logTargetId = $blockId;
             } elseif ($entryId && filter_var($entryId, FILTER_VALIDATE_INT)) {
                 $this->planRepository->deleteEntry((int)$entryId);
                 $message = 'Eintrag erfolgreich gelöscht.';
-                $logTargetId = $entryId; // Logge die Entry-ID
+                $logTargetId = $entryId;
             } else {
-                throw new Exception("Ungültige Eintrags- oder Block-ID.");
+                throw new Exception("Ungültige Eintrags- oder Block-ID.", 400);
             }
 
+            // Rückgabe für Trait
             return [
                 'json_response' => ['success' => true, 'message' => $message],
+                'log_action' => 'delete_entry',
+                'log_target_type' => 'timetable_entry',
                 'log_target_id' => $logTargetId,
                 'log_details' => $logDetails
             ];
-        }, 'delete_entry', 'timetable_entry');
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
+    /**
+     * API: Speichert eine Vertretung.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
+     */
     public function saveSubstitution()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
-            if (!$data) throw new Exception("Ungültige Daten empfangen.");
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
+            if (!$data) throw new Exception("Ungültige Daten empfangen.", 400);
+            
+            // Repository wirft Exception bei Konflikt
             $resultData = $this->planRepository->createOrUpdateSubstitution($data);
             
+            // Rückgabe für Trait
             return [
                 'json_response' => ['success' => true, 'message' => 'Vertretung erfolgreich gespeichert.', 'data' => $resultData],
+                'log_action' => 'save_substitution',
+                'log_target_type' => 'substitution',
                 'log_target_id' => $resultData['substitution_id'] ?? $data['substitution_id'] ?? null,
                 'log_details' => $data
             ];
-        }, 'save_substitution', 'substitution');
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
+    /**
+     * API: Löscht eine Vertretung.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
+     */
     public function deleteSubstitution()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $id = $data['substitution_id'] ?? null;
-            if (!filter_var($id, FILTER_VALIDATE_INT)) throw new Exception("Ungültige Vertretungs-ID.");
+            if (!filter_var($id, FILTER_VALIDATE_INT)) {
+                throw new Exception("Ungültige Vertretungs-ID.", 400);
+            }
+            
             $this->planRepository->deleteSubstitution((int)$id);
             
+            // Rückgabe für Trait
             return [
                 'json_response' => ['success' => true, 'message' => 'Vertretung erfolgreich gelöscht.'],
+                'log_action' => 'delete_substitution',
+                'log_target_type' => 'substitution',
                 'log_target_id' => $id,
                 'log_details' => $data
             ];
-        }, 'delete_substitution', 'substitution');
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
-    // --- Methoden für Veröffentlichung (POST requests) ---
-
+    /**
+     * API: Veröffentlicht eine Woche.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
+     */
     public function publish()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
             $week = filter_var($data['week'] ?? null, FILTER_VALIDATE_INT);
-            $target = $data['target'] ?? null; // 'student' or 'teacher'
+            $target = $data['target'] ?? null;
             $userId = $_SESSION['user_id'];
 
             if (!$year || !$week || !in_array($target, ['student', 'teacher'])) {
-                throw new Exception("Ungültige Parameter für Veröffentlichung.");
+                throw new Exception("Ungültige Parameter für Veröffentlichung.", 400);
             }
 
             $success = $this->planRepository->publishWeek($year, $week, $target, $userId);
-
-            if ($success) {
-                $newStatus = $this->planRepository->getPublishStatus($year, $week); // Get updated status
-                return [
-                    'json_response' => [
-                        'success' => true,
-                        'message' => "Stundenplan KW $week/$year für " . ($target === 'student' ? 'Schüler' : 'Lehrer') . " veröffentlicht.",
-                        'data' => ['publishStatus' => $newStatus] // Send updated status back
-                    ],
-                    'log_target_id' => null, // No specific entry ID
-                    'log_details' => ['year' => $year, 'week' => $week, 'target' => $target]
-                ];
-            } else {
-                throw new Exception("Veröffentlichung fehlgeschlagen.");
+            if (!$success) {
+                throw new Exception("Veröffentlichung fehlgeschlagen.", 500);
             }
-        }, 'publish_week', 'system');
+
+            $newStatus = $this->planRepository->getPublishStatus($year, $week);
+            
+            // Rückgabe für Trait
+            return [
+                'json_response' => [
+                    'success' => true,
+                    'message' => "Stundenplan KW $week/$year für " . ($target === 'student' ? 'Schüler' : 'Lehrer') . " veröffentlicht.",
+                    'data' => ['publishStatus' => $newStatus]
+                ],
+                'log_action' => 'publish_week',
+                'log_target_type' => 'system',
+                'log_details' => ['year' => $year, 'week' => $week, 'target' => $target]
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
-
+    /**
+     * API: Nimmt Veröffentlichung zurück.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
+     */
     public function unpublish()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
             $week = filter_var($data['week'] ?? null, FILTER_VALIDATE_INT);
             $target = $data['target'] ?? null;
 
             if (!$year || !$week || !in_array($target, ['student', 'teacher'])) {
-                throw new Exception("Ungültige Parameter.");
+                throw new Exception("Ungültige Parameter.", 400);
             }
 
             $success = $this->planRepository->unpublishWeek($year, $week, $target);
-
-            if ($success) {
-                 $newStatus = $this->planRepository->getPublishStatus($year, $week); // Get updated status
-                return [
-                    'json_response' => [
-                        'success' => true,
-                        'message' => "Veröffentlichung KW $week/$year für " . ($target === 'student' ? 'Schüler' : 'Lehrer') . " zurückgenommen.",
-                        'data' => ['publishStatus' => $newStatus] // Send updated status back
-                    ],
-                    'log_target_id' => null,
-                    'log_details' => ['year' => $year, 'week' => $week, 'target' => $target]
-                ];
-            } else {
-                throw new Exception("Zurücknahme fehlgeschlagen.");
+            if (!$success) {
+                throw new Exception("Zurücknahme fehlgeschlagen.", 500);
             }
-        }, 'unpublish_week', 'system');
+
+            $newStatus = $this->planRepository->getPublishStatus($year, $week);
+            
+            // Rückgabe für Trait
+            return [
+                'json_response' => [
+                    'success' => true,
+                    'message' => "Veröffentlichung KW $week/$year für " . ($target === 'student' ? 'Schüler' : 'Lehrer') . " zurückgenommen.",
+                    'data' => ['publishStatus' => $newStatus]
+                ],
+                'log_action' => 'unpublish_week',
+                'log_target_type' => 'system',
+                'log_details' => ['year' => $year, 'week' => $week, 'target' => $target]
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
-     /**
-     * API: Holt den aktuellen Veröffentlichungsstatus für eine Woche.
-     * (GET request - no CSRF needed)
+    /**
+     * API: Holt den aktuellen Veröffentlichungsstatus.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_GET.
      */
      public function getStatus() {
-         Security::requireRole(['planer', 'admin']);
-         $callback = function() {
-             $year = filter_input(INPUT_GET, 'year', FILTER_VALIDATE_INT);
-             $week = filter_input(INPUT_GET, 'week', FILTER_VALIDATE_INT);
+         $this->handleApiRequest(function($data) { // $data ist $_GET
+             
+             $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
+             $week = filter_var($data['week'] ?? null, FILTER_VALIDATE_INT);
 
              if (!$year || !$week) {
-                 throw new Exception("Jahr und Woche erforderlich.");
+                 throw new Exception("Jahr und Woche erforderlich.", 400);
              }
              $status = $this->planRepository->getPublishStatus($year, $week);
-             echo json_encode(['success' => true, 'data' => ['publishStatus' => $status]], JSON_THROW_ON_ERROR); // Wrap status
-         };
-         $this->handleApiRequest($callback, '', '', true); // Mark as GET request
+             
+             // Rückgabe für Trait
+             return [
+                 'json_response' => ['success' => true, 'data' => ['publishStatus' => $status]]
+             ];
+
+         }, [
+             'inputType' => 'get',
+             'checkRole' => ['planer', 'admin']
+         ]);
      }
 
     /**
-     * API-Endpunkt für die Echtzeit-Konfliktprüfung.
-     * handleApiRequest fängt die Exception vom Repository (falls Konflikte)
-     * und gibt einen 409-Statuscode mit den Konfliktmeldungen zurück.
+     * API: Echtzeit-Konfliktprüfung.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function checkConflictsApi()
     {
-        Security::requireRole(['planer', 'admin']);
-        
-        // Verwende handleApiRequest für CSRF und Fehlerbehandlung, aber protokolliere diese Lese-Aktion nicht.
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             if (!$data) {
-                throw new Exception("Keine Daten für Konfliktprüfung empfangen.");
+                throw new Exception("Keine Daten für Konfliktprüfung empfangen.", 400);
             }
 
-            // Validierung (einfach)
             if (empty($data['year']) || empty($data['calendar_week']) || empty($data['day_of_week']) || empty($data['start_period_number']) || empty($data['end_period_number'])) {
-                throw new Exception("Unvollständige Daten für Konfliktprüfung.");
+                throw new Exception("Unvollständige Daten für Konfliktprüfung.", 400);
             }
-            // class_id '0' oder null ist im Lehrermodus erlaubt
             if (!isset($data['class_id'])) {
-                throw new Exception("Fehlende class_id für Konfliktprüfung.");
+                throw new Exception("Fehlende class_id für Konfliktprüfung.", 400);
             }
 
             $excludeEntryId = !empty($data['entry_id']) ? (int)$data['entry_id'] : null;
             $excludeBlockId = !empty($data['block_id']) ? (string)$data['block_id'] : null;
 
-            // Ruft die Repository-Methode auf.
-            // Diese wirft bei Konflikten eine Exception, die von handleApiRequest gefangen wird.
+            // Repository wirft Exception bei Konflikt
             $conflicts = $this->planRepository->checkConflicts($data, $excludeEntryId, $excludeBlockId);
 
-            // Wenn checkConflicts *keine* Exception wirft, gab es keine Konflikte.
+            // Keine Exception = keine Konflikte
             return [
                 'json_response' => ['success' => true, 'conflicts' => []]
-                // Keine Log-Infos, da dies eine Lese-Aktion ist
+                // Kein Audit-Log für diese Lese-Aktion
             ];
-        }); // Keine Log-Parameter übergeben
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
     /**
-     * API-Endpunkt zum Kopieren einer Woche.
+     * API: Kopiert eine Woche.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function copyWeek()
     {
-        Security::requireRole(['planer', 'admin']);
-        // Dies ist KEINE GET-Anfrage, CSRF wird in handleApiRequest geprüft
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
-
-            // Validierung der Eingabedaten
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $sourceYear = filter_var($data['sourceYear'] ?? null, FILTER_VALIDATE_INT);
             $sourceWeek = filter_var($data['sourceWeek'] ?? null, FILTER_VALIDATE_INT);
             $targetYear = filter_var($data['targetYear'] ?? null, FILTER_VALIDATE_INT);
@@ -427,57 +453,59 @@ class PlanController
             $teacherId = filter_var($data['teacherId'] ?? null, FILTER_VALIDATE_INT) ?: null;
 
             if (!$sourceYear || !$sourceWeek || !$targetYear || !$targetWeek) {
-                throw new Exception("Quell- und Zielwoche sind erforderlich.");
+                throw new Exception("Quell- und Zielwoche sind erforderlich.", 400);
             }
             if ($classId === null && $teacherId === null) {
-                throw new Exception("Klasse oder Lehrer erforderlich.");
+                throw new Exception("Klasse oder Lehrer erforderlich.", 400);
             }
 
-            // Aufruf der Repository-Methode
             $copiedCount = $this->planRepository->copyWeekData(
-                $sourceYear,
-                $sourceWeek,
-                $targetYear,
-                $targetWeek,
-                $classId,
-                $teacherId
+                $sourceYear, $sourceWeek, $targetYear, $targetWeek, $classId, $teacherId
             );
-
+            
+            // Rückgabe für Trait
             return [
                 'json_response' => [
                     'success' => true,
                     'message' => "Woche erfolgreich kopiert. {$copiedCount} Einträge wurden in KW {$targetWeek}/{$targetYear} eingefügt.",
                     'copiedCount' => $copiedCount
                 ],
-                'log_target_id' => null, // Kein spezifisches Objekt, Systemaktion
-                'log_details' => $data // Logge die Quell- und Zieldaten
+                'log_action' => 'copy_week',
+                'log_target_type' => 'system',
+                'log_details' => $data
             ];
-        }, 'copy_week', 'system');
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
-    // --- NEUE API METHODEN FÜR VORLAGEN ---
+    // --- API METHODEN FÜR VORLAGEN (alle refaktorisiert) ---
 
     /**
-     * API: Holt alle verfügbaren Vorlagen (GET - no CSRF needed).
+     * API: Holt alle Vorlagen. (GET)
      */
     public function getTemplates()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
+        $this->handleApiRequest(function($data) {
             $templates = $this->planRepository->getTemplates();
-            echo json_encode(['success' => true, 'data' => $templates], JSON_THROW_ON_ERROR);
-        }, '', '', true); // Mark as GET request
+            return [
+                'json_response' => ['success' => true, 'data' => $templates]
+            ];
+        }, [
+            'inputType' => 'get',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
     /**
-     * API: Erstellt eine neue Vorlage aus der aktuell angezeigten Woche (POST).
+     * API: Erstellt Vorlage aus Woche. (JSON)
      */
     public function createTemplate()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
-
+        $this->handleApiRequest(function($data) {
+            
             $name = trim($data['name'] ?? '');
             $description = trim($data['description'] ?? '') ?: null;
             $sourceYear = filter_var($data['sourceYear'] ?? null, FILTER_VALIDATE_INT);
@@ -486,10 +514,9 @@ class PlanController
             $sourceTeacherId = filter_var($data['sourceTeacherId'] ?? null, FILTER_VALIDATE_INT) ?: null;
 
             if (empty($name) || !$sourceYear || !$sourceWeek || ($sourceClassId === null && $sourceTeacherId === null)) {
-                throw new Exception("Ungültige Daten zum Erstellen der Vorlage.");
+                throw new Exception("Ungültige Daten zum Erstellen der Vorlage.", 400);
             }
 
-            // Quelldaten holen
             $sourceEntries = [];
             if ($sourceClassId) {
                 $sourceEntries = $this->planRepository->getTimetableForClassAsPlaner($sourceClassId, $sourceYear, $sourceWeek);
@@ -498,33 +525,35 @@ class PlanController
             }
 
             if (empty($sourceEntries)) {
-                throw new Exception("Keine Stundenplandaten in der Quellwoche gefunden, um die Vorlage zu erstellen.");
+                throw new Exception("Keine Stundenplandaten in der Quellwoche gefunden.", 400);
             }
 
-            // Vorlage erstellen
+            // Repository wirft 409 bei Namenskonflikt
             $newTemplateId = $this->planRepository->createTemplate($name, $description, $sourceEntries);
+            $newTemplate = ['template_id' => $newTemplateId, 'name' => $name, 'description' => $description];
 
+            // Rückgabe für Trait
             return [
-                'json_response' => [
-                    'success' => true,
-                    'message' => "Vorlage '{$name}' erfolgreich erstellt.",
-                    'data' => ['template_id' => $newTemplateId, 'name' => $name, 'description' => $description] // Neue Vorlage zurückgeben
-                ],
+                'json_response' => ['success' => true, 'message' => "Vorlage '{$name}' erfolgreich erstellt.", 'data' => $newTemplate],
+                'log_action' => 'create_template_from_week',
+                'log_target_type' => 'template',
                 'log_target_id' => $newTemplateId,
                 'log_details' => $data
             ];
-        }, 'create_template_from_week', 'template');
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
     /**
-     * API: Wendet eine Vorlage auf die aktuell ausgewählte Woche an (POST).
+     * API: Wendet Vorlage an. (JSON)
      */
     public function applyTemplate()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
-
+        $this->handleApiRequest(function($data) {
+            
             $templateId = filter_var($data['templateId'] ?? null, FILTER_VALIDATE_INT);
             $targetYear = filter_var($data['targetYear'] ?? null, FILTER_VALIDATE_INT);
             $targetWeek = filter_var($data['targetWeek'] ?? null, FILTER_VALIDATE_INT);
@@ -532,109 +561,124 @@ class PlanController
             $targetTeacherId = filter_var($data['targetTeacherId'] ?? null, FILTER_VALIDATE_INT) ?: null;
 
             if (!$templateId || !$targetYear || !$targetWeek || ($targetClassId === null && $targetTeacherId === null)) {
-                throw new Exception("Ungültige Daten zum Anwenden der Vorlage.");
+                throw new Exception("Ungültige Daten zum Anwenden der Vorlage.", 400);
             }
 
-            // Vorlage anwenden
             $appliedCount = $this->planRepository->applyTemplateToWeek(
-                $templateId,
-                $targetYear,
-                $targetWeek,
-                $targetClassId,
-                $targetTeacherId
+                $templateId, $targetYear, $targetWeek, $targetClassId, $targetTeacherId
             );
             
+            // Rückgabe für Trait
             return [
                 'json_response' => [
                     'success' => true,
                     'message' => "Vorlage erfolgreich angewendet. {$appliedCount} Einträge wurden in KW {$targetWeek}/{$targetYear} eingefügt.",
                     'appliedCount' => $appliedCount
                 ],
+                'log_action' => 'apply_template',
+                'log_target_type' => 'template',
                 'log_target_id' => $templateId,
                 'log_details' => $data
             ];
-        }, 'apply_template', 'template');
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
 
     /**
-     * API: Löscht eine Vorlage (POST).
+     * API: Löscht Vorlage. (JSON)
      */
     public function deleteTemplate()
     {
-        Security::requireRole(['planer', 'admin']);
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) {
+            
             $templateId = filter_var($data['templateId'] ?? null, FILTER_VALIDATE_INT);
-
             if (!$templateId) {
-                throw new Exception("Ungültige Vorlagen-ID.");
+                throw new Exception("Ungültige Vorlagen-ID.", 400);
             }
 
             $success = $this->planRepository->deleteTemplate($templateId);
-
-            if ($success) {
-                return [
-                    'json_response' => ['success' => true, 'message' => 'Vorlage erfolgreich gelöscht.'],
-                    'log_target_id' => $templateId,
-                    'log_details' => $data
-                ];
-            } else {
-                throw new Exception("Fehler beim Löschen der Vorlage.");
+            if (!$success) {
+                throw new Exception("Fehler beim Löschen der Vorlage.", 500);
             }
-        }, 'delete_template', 'template');
+
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'message' => 'Vorlage erfolgreich gelöscht.'],
+                'log_action' => 'delete_template',
+                'log_target_type' => 'template',
+                'log_target_id' => $templateId,
+                'log_details' => $data
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
     
     /**
-     * API: Lädt die Details (Stammdaten + Einträge) einer einzelnen Vorlage.
-     * (GET request)
+     * API: Lädt Details einer Vorlage. (GET)
+     * (Parameter $templateId wird von der Route übergeben)
      */
     public function getTemplateDetails(int $templateId)
     {
-        Security::requireRole(['planer', 'admin']);
-        // Verwende den GET-Modus des Helpers (true)
-        $this->handleApiRequest(function() use ($templateId) {
+        $this->handleApiRequest(function($data) use ($templateId) { // $data ist $_GET
+            
             $details = $this->planRepository->loadTemplateDetails($templateId);
-            echo json_encode(['success' => true, 'data' => $details], JSON_THROW_ON_ERROR);
-        }, '', '', true);
+            
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'data' => $details]
+            ];
+
+        }, [
+            'inputType' => 'get',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
     
     /**
-     * API: Speichert eine Vorlage (neu oder Update) aus dem Editor.
-     * (POST request)
+     * API: Speichert Details einer Vorlage (aus dem Editor). (JSON)
      */
     public function saveTemplateDetails()
     {
-        Security::requireRole(['planer', 'admin']);
-        
-        $this->handleApiRequest(function() {
-            $data = json_decode(file_get_contents('php://input'), true, 512, JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
             
-            // Validierung im Controller, bevor es an das Repo geht
             if (empty($data['name'])) {
-                throw new Exception("Vorlagenname darf nicht leer sein.");
+                throw new Exception("Vorlagenname darf nicht leer sein.", 400);
             }
 
+            // Repository wirft 409 bei Namenskonflikt
             $savedTemplate = $this->planRepository->saveTemplateDetails($data);
             
             $action = empty($data['template_id']) ? 'create_template' : 'update_template';
 
+            // Log-Details
+            $logDetails = [
+                'name' => $savedTemplate['name'],
+                'description' => $savedTemplate['description'],
+                'entries_count' => count($data['entries'] ?? [])
+            ];
+
+            // Rückgabe für Trait
             return [
                 'json_response' => [
                     'success' => true,
                     'message' => 'Vorlage erfolgreich gespeichert.',
-                    'data' => $savedTemplate // Gibt die gespeicherten Stammdaten (mit ID) zurück
+                    'data' => $savedTemplate
                 ],
+                'log_action' => $action,
+                'log_target_type' => 'template',
                 'log_target_id' => $savedTemplate['template_id'],
-                'log_details' => [
-                    'name' => $savedTemplate['name'],
-                    'description' => $savedTemplate['description'],
-                    'entries_count' => count($data['entries'] ?? [])
-                ]
+                'log_details' => $logDetails
             ];
 
-        }, 'save_template_details', 'template'); // Aktion wird intern bestimmt, Logging hier allgemein
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['planer', 'admin']
+        ]);
     }
-
-
-    // --- ENDE NEUE API METHODEN FÜR VORLAGEN ---
 }

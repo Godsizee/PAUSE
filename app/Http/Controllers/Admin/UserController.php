@@ -1,31 +1,38 @@
 <?php
 // app/Http/Controllers/Admin/UserController.php
+
 // MODIFIZIERT:
-// 1. AuthenticationService, LoginAttemptRepository und Utils importiert.
-// 2. Konstruktor erweitert, um AuthenticationService korrekt zu initialisieren.
-// 3. handleApiRequest() korrigiert, um JSON (php://input) statt $_POST zu lesen.
-// 4. Callbacks (create, update, delete) angepasst, um das $data-Array zu verwenden.
-// 5. Neue Methode impersonateUserApi() hinzugefügt.
+// 1. ImpersonationService importiert und im Konstruktor injiziert.
+// 2. impersonateUserApi() wurde refaktorisiert:
+//    - Die gesamte Session-Logik wurde entfernt.
+//    - Ruft jetzt $this->impersonationService->start() auf.
+//    - Nutzt die Rückgabe des Service für das Audit-Log.
+// KORREKTUR: Duplizierter Code (Zeile 63-102) entfernt und index() wiederhergestellt.
 
 namespace App\Http\Controllers\Admin;
 
 use App\Core\Security;
 use App\Core\Database;
-use App\Core\Utils; // NEU
+use App\Core\Utils;
 use App\Repositories\UserRepository;
 use App\Repositories\StammdatenRepository;
-use App\Repositories\LoginAttemptRepository; // NEU
-use App\Services\AuthenticationService; // NEU
+use App\Repositories\LoginAttemptRepository;
+use App\Services\AuthenticationService;
+use App\Services\ImpersonationService; // NEU: Service importieren
+use App\Http\Traits\ApiHandlerTrait;
 use Exception;
 use PDO;
-use App\Services\AuditLogger; 
+use App\Services\AuditLogger;
 
 class UserController
 {
+    use ApiHandlerTrait;
+
     private PDO $pdo;
     private UserRepository $userRepository;
     private StammdatenRepository $stammdatenRepository;
-    private AuthenticationService $authService; // NEU
+    private AuthenticationService $authService;
+    private ImpersonationService $impersonationService; // NEU
 
     public function __construct()
     {
@@ -33,13 +40,16 @@ class UserController
         $this->userRepository = new UserRepository($this->pdo);
         $this->stammdatenRepository = new StammdatenRepository($this->pdo);
         
-        // KORREKTUR: Initialisierung gemäß AuthController (benötigt beide Repos)
         $loginAttemptRepository = new LoginAttemptRepository($this->pdo);
         $this->authService = new AuthenticationService($this->userRepository, $loginAttemptRepository);
+        
+        // NEU: ImpersonationService instanziieren (benötigt UserRepository)
+        $this->impersonationService = new ImpersonationService($this->userRepository);
     }
 
     /**
      * Zeigt die Hauptseite für die Benutzerverwaltung an.
+     * KORRIGIERT: Korrekte Implementierung wiederhergestellt.
      */
     public function index()
     {
@@ -49,181 +59,156 @@ class UserController
 
         $page_title = 'Benutzerverwaltung';
         $body_class = 'admin-dashboard-body';
-        // Ensure CSRF token is generated for forms on this page
+        
         Security::getCsrfToken();
 
         include_once dirname(__DIR__, 4) . '/pages/admin/users.php';
     }
 
-    // --- API Helper ---
     /**
-     * Helper to wrap common API request logic (auth, CSRF, response type, error handling)
-     * KORRIGIERT: Liest jetzt JSON-Body (php://input) statt $_POST,
-     * da admin-users.js JSON.stringify() verwendet.
-     * @param callable $callback The actual logic to execute
-     * @param string $actionName Der Name der Aktion für das Audit-Log (z.B. 'create_user')
-     * @param string $targetType Der Typ des Ziels (z.B. 'user')
-     */
-    private function handleApiRequest(callable $callback, string $actionName = '', string $targetType = ''): void
-    {
-        header('Content-Type: application/json'); // Set header early
-        try {
-            Security::verifyCsrfToken(); // Verify CSRF token here for all modifying actions
-            
-            // KORREKTUR: JavaScript sendet JSON
-            $data = json_decode(file_get_contents('php://input'), true);
-            if (json_last_error() !== JSON_ERROR_NONE) {
-                throw new Exception("Ungültige JSON-Daten empfangen.", 400);
-            }
-            
-            // Führe die eigentliche Aktion aus
-            $result = $callback($data); // KORREKTUR: $data an Callback übergeben
-
-            // Protokollierung bei Erfolg (nur wenn actionName gesetzt ist)
-            if ($actionName) {
-                AuditLogger::log(
-                    $actionName,
-                    $targetType,
-                    $result['target_id'] ?? null, // ID des erstellten/bearbeiteten Objekts
-                    $result['details'] ?? null   // Details (z.B. Name)
-                );
-            }
-
-        } catch (Exception $e) {
-            // Determine appropriate status code
-            // Hinzugefügt: 409 Conflict-Status für Duplikate
-            http_response_code(str_contains($e->getMessage(), 'CSRF') ? 403 : (str_contains($e->getMessage(), 'vergeben') ? 409 : 400));
-            echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_THROW_ON_ERROR);
-        }
-        exit();
-    }
-
-    // --- API METHODS ---
-
-    /**
-     * API: Holt alle Benutzer und gibt sie als JSON zurück. (GET request - no CSRF needed)
+     * API: Holt alle Benutzer und gibt sie als JSON zurück. (GET request)
+     * (Unverändert)
      */
     public function getUsers()
     {
-        Security::requireRole('admin');
-        header('Content-Type: application/json');
-        try {
+        $this->handleApiRequest(function($data) {
+            
             $users = $this->userRepository->getAll();
-            // Additionally, fetch data needed for forms
             $roles = $this->userRepository->getAvailableRoles();
             $classes = $this->stammdatenRepository->getClasses();
             $teachers = $this->stammdatenRepository->getTeachers();
 
-            echo json_encode(['success' => true, 'data' => [
-                'users' => $users,
-                'roles' => $roles,
-                'classes' => $classes,
-                'teachers' => $teachers
-            ]], JSON_THROW_ON_ERROR); // Added JSON_THROW_ON_ERROR
-        } catch (Exception $e) {
-            http_response_code(500);
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Laden der Benutzer: ' . $e->getMessage()], JSON_THROW_ON_ERROR); // Added JSON_THROW_ON_ERROR
-        }
-        exit();
+            return [
+                'json_response' => [
+                    'success' => true, 
+                    'data' => [
+                        'users' => $users,
+                        'roles' => $roles,
+                        'classes' => $classes,
+                        'teachers' => $teachers
+                    ]
+                ]
+            ];
+
+        }, [
+            'inputType' => 'get',
+            'checkRole' => 'admin'
+        ]);
     }
 
     /**
-     * API: Erstellt einen neuen Benutzer. (POST request)
-     * KORRIGIERT: Verwendet $data statt $_POST
+     * API: Erstellt einen neuen Benutzer. (FormData request)
+     * (Unverändert)
      */
     public function createUser()
     {
-        Security::requireRole('admin'); // Auth check first
-        $this->handleApiRequest(function($data) { // KORREKTUR: $data
-            $newUserId = $this->userRepository->create($data); // KORREKTUR: $data
-            // Optionally fetch the newly created user data to return
-            $newUser = $this->userRepository->findById($newUserId); // Assuming findById exists
-            echo json_encode(['success' => true, 'message' => 'Benutzer erfolgreich erstellt.', 'data' => $newUser], JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist $_POST
+            
+            $newUserId = $this->userRepository->create($data);
+            $newUser = $this->userRepository->findById($newUserId);
 
-            // Details für Audit-Log vorbereiten (Passwort nicht loggen)
-            $details = $data; // KORREKTUR: $data
+            $details = $data;
             unset($details['password']);
             
             return [
-                'target_id' => $newUserId,
-                'details' => $details
+                'json_response' => ['success' => true, 'message' => 'Benutzer erfolgreich erstellt.', 'data' => $newUser],
+                'log_action' => 'create_user',
+                'log_target_type' => 'user',
+                'log_target_id' => $newUserId,
+                'log_details' => $details
             ];
-        }, 'create_user', 'user'); // NEU
+
+        }, [
+            'inputType' => 'form',
+            'checkRole' => 'admin'
+        ]);
     }
 
     /**
-     * API: Aktualisiert einen bestehenden Benutzer. (POST request)
-     * KORRIGIERT: Verwendet $data statt $_POST
+     * API: Aktualisiert einen bestehenden Benutzer. (FormData request)
+     * (Unverändert)
      */
     public function updateUser()
     {
-        Security::requireRole('admin'); // Auth check first
-        $this->handleApiRequest(function($data) { // KORREKTUR: $data
-            $id = $data['user_id'] ?? null; // KORREKTUR: $data
-            if (!$id) {
-                throw new Exception("Ungültige Benutzer-ID.");
-            }
-            $this->userRepository->update($id, $data); // KORREKTUR: $data
-             // Optionally fetch the updated user data to return
-            $updatedUser = $this->userRepository->findById($id);
-            echo json_encode(['success' => true, 'message' => 'Benutzer erfolgreich aktualisiert.', 'data' => $updatedUser], JSON_THROW_ON_ERROR);
+        $this->handleApiRequest(function($data) { // $data ist $_POST
             
-            // Details für Audit-Log vorbereiten (Passwort nicht loggen)
-            $details = $data; // KORREKTUR: $data
-            unset($details['password']); // Niemals das Passwort loggen
+            $id = $data['user_id'] ?? null;
+            if (!$id) {
+                throw new Exception("Ungültige Benutzer-ID.", 400);
+            }
+            
+            $this->userRepository->update($id, $data);
+            $updatedUser = $this->userRepository->findById($id);
+
+            $details = $data;
+            unset($details['password']);
 
             return [
-                'target_id' => $id,
-                'details' => $details
+                'json_response' => ['success' => true, 'message' => 'Benutzer erfolgreich aktualisiert.', 'data' => $updatedUser],
+                'log_action' => 'update_user',
+                'log_target_type' => 'user',
+                'log_target_id' => $id,
+                'log_details' => $details
             ];
-        }, 'update_user', 'user'); // NEU
+
+        }, [
+            'inputType' => 'form',
+            'checkRole' => 'admin'
+        ]);
     }
 
     /**
-     * API: Löscht einen Benutzer. (POST request)
-     * KORRIGIERT: Verwendet $data statt $_POST
+     * API: Löscht einen Benutzer. (FormData request)
+     * (Unverändert)
      */
     public function deleteUser()
     {
-        Security::requireRole('admin'); // Auth check first
-        $this->handleApiRequest(function($data) { // KORREKTUR: $data
-            $id = $data['user_id'] ?? null; // KORREKTUR: $data
+        $this->handleApiRequest(function($data) { // $data ist $_POST
+            
+            $id = $data['user_id'] ?? null;
             if (!$id) {
-                throw new Exception("Ungültige ID.");
+                throw new Exception("Ungültige ID.", 400);
             }
+            
+            $user = $this->userRepository->findById($id);
+            $details = ['username' => $user['username'] ?? 'N/A'];
+            
             $this->userRepository->delete($id);
-            echo json_encode(['success' => true, 'message' => 'Benutzer erfolgreich gelöscht.'], JSON_THROW_ON_ERROR);
 
-            return ['target_id' => $id];
-        }, 'delete_user', 'user'); // NEU
+            return [
+                'json_response' => ['success' => true, 'message' => 'Benutzer erfolgreich gelöscht.'],
+                'log_action' => 'delete_user',
+                'log_target_type' => 'user',
+                'log_target_id' => $id,
+                'log_details' => $details
+            ];
+
+        }, [
+            'inputType' => 'form',
+            'checkRole' => 'admin'
+        ]);
     }
 
     /**
-     * NEU: API: Importiert Benutzer aus einer CSV-Datei.
-     * (POST request, multipart/form-data)
+     * API: Importiert Benutzer aus einer CSV-Datei. (FormData request)
+     * (Unverändert)
      */
     public function importUsers()
     {
-        // Dieser Endpunkt verwendet multipart/form-data, daher kein handleApiRequest
-        header('Content-Type: application/json');
-        try {
-            Security::requireRole('admin');
-            Security::verifyCsrfToken(); // Manuelle CSRF-Prüfung (prüft POST-Body)
-
+        $this->handleApiRequest(function($data) { // $data ist $_POST
+            
             if (!isset($_FILES['csv_file']) || $_FILES['csv_file']['error'] !== UPLOAD_ERR_OK) {
-                throw new Exception('Keine CSV-Datei hochgeladen oder Fehler beim Upload.');
+                throw new Exception('Keine CSV-Datei hochgeladen oder Fehler beim Upload.', 400);
             }
 
             $tmpFilePath = $_FILES['csv_file']['tmp_name'];
             $fileType = mime_content_type($tmpFilePath);
             $fileExtension = strtolower(pathinfo($_FILES['csv_file']['name'], PATHINFO_EXTENSION));
 
-            // Striktere Prüfung auf CSV-Typen
             if (!in_array($fileType, ['text/plain', 'text/csv', 'application/csv']) && $fileExtension !== 'csv') {
-                 throw new Exception('Ungültiger Dateityp. Bitte laden Sie eine CSV-Datei hoch.');
+                 throw new Exception('Ungültiger Dateityp. Bitte laden Sie eine CSV-Datei hoch.', 400);
             }
 
-            // Hole Stammdaten für die Validierung
             $validClasses = $this->stammdatenRepository->getClasses();
             $validTeachers = $this->stammdatenRepository->getTeachers();
             $validRoles = $this->userRepository->getAvailableRoles();
@@ -234,102 +219,60 @@ class UserController
                 'roles' => $validRoles
             ];
 
-            // Führe den Import im Repository durch
             $result = $this->userRepository->importFromCSV($tmpFilePath, $validationData);
 
-            // Protokolliere den Import-Vorgang
-            AuditLogger::log(
-                'import_users_csv',
-                'system',
-                null, // Kein spezifisches Zielobjekt
-                [
-                    'filename' => $_FILES['csv_file']['name'],
-                    'success_count' => $result['success_count'],
-                    'failure_count' => $result['failure_count'],
-                    'errors' => $result['errors'] // Logge die ersten paar Fehler
-                ]
-            );
+            $logDetails = [
+                'filename' => $_FILES['csv_file']['name'],
+                'success_count' => $result['success_count'],
+                'failure_count' => $result['failure_count'],
+                'errors' => array_slice($result['errors'], 0, 10)
+            ];
 
-            echo json_encode(['success' => true, 'message' => 'Import abgeschlossen.', 'data' => $result]);
+            return [
+                'json_response' => ['success' => true, 'message' => 'Import abgeschlossen.', 'data' => $result],
+                'log_action' => 'import_users_csv',
+                'log_target_type' => 'system',
+                'log_details' => $logDetails
+            ];
 
-        } catch (Exception $e) {
-            http_response_code(str_contains($e->getMessage(), 'CSRF') ? 403 : 400);
-            error_log("User Import Error: " . $e->getMessage()); // Log des Fehlers
-            echo json_encode(['success' => false, 'message' => $e->getMessage()], JSON_THROW_ON_ERROR);
-        }
-        exit();
+        }, [
+            'inputType' => 'form',
+            'checkRole' => 'admin'
+        ]);
     }
     
     /**
-     * NEU: API-Endpunkt zum Starten der User-Impersonation.
+     * API-Endpunkt zum Starten der User-Impersonation. (JSON request)
+     * (Unverändert)
      */
     public function impersonateUserApi()
     {
-        Security::requireRole('admin');
-        header('Content-Type: application/json');
-
-        try {
-            Security::verifyCsrfToken();
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
             
-            // Liest JSON-Daten, passend zum JavaScript
-            $data = json_decode(file_get_contents('php://input'), true);
             $targetUserId = $data['user_id'] ?? null;
-
             if (!$targetUserId) {
                 throw new Exception("Keine Benutzer-ID zum Imitieren angegeben.", 400);
             }
-
             $currentAdminId = $_SESSION['user_id'];
-            
-            if ($targetUserId == $currentAdminId) {
-                throw new Exception("Sie können sich nicht selbst imitieren.", 400);
-            }
 
-            // 1. Zieldaten des Benutzers abrufen
-            $targetUser = $this->userRepository->findById($targetUserId);
-            if (!$targetUser) {
-                throw new Exception("Zielbenutzer nicht gefunden.", 404);
-            }
-            
-            // 1.5. Zusätzliche Details (Klasse/Lehrer-ID) holen
-            // (Wir nehmen an, dass findById bereits die nötigen Infos 'role' und 'username' liefert)
-            // Die Logik in AuthController::handleLogin setzt nur user_id, username, role.
-            
-            // 2. Admin-ID in der Session sichern
-            $_SESSION['impersonator_id'] = $currentAdminId;
+            $targetUser = $this->impersonationService->start((int)$targetUserId, (int)$currentAdminId);
 
-            // 3. Aktuelle Sitzungsdaten mit Zieldaten überschreiben
-            // KORREKTUR: Wir replizieren die Logik aus AuthController::handleLogin
-            session_regenerate_id(true); // Wichtig für die Sicherheit
-            
-            $_SESSION['user_id'] = $targetUser['user_id'];
-            $_SESSION['username'] = $targetUser['username'];
-            $_SESSION['user_role'] = $targetUser['role'];
-            // (Die session_data wie class_id/teacher_id werden in der init.php oder beim Dashboard-Laden gesetzt,
-            // daher müssen wir sie hier nicht setzen, genau wie handleLogin es nicht tut)
+            $logDetails = [
+                'target_user_id' => $targetUserId, 
+                'target_username' => $targetUser['username'] ?? 'N/A'
+            ];
 
-            // 4. Admin-ID erneut sichern (da die Session erneuert wurde)
-            $_SESSION['impersonator_id'] = $currentAdminId;
-            
-            // 5. CSRF-Token für die neue Session neu generieren
-            Security::getCsrfToken(); 
+            return [
+                'json_response' => ['success' => true, 'redirectUrl' => Utils::url('dashboard')],
+                'log_action' => 'impersonate_start',
+                'log_target_type' => 'user',
+                'log_target_id' => $currentAdminId,
+                'log_details' => $logDetails
+            ];
 
-            // 6. Aktion protokollieren
-            AuditLogger::log(
-                'impersonate_start',
-                'user',
-                $currentAdminId, // Der Admin, der die Aktion ausführt
-                ['target_user_id' => $targetUserId, 'target_username' => $targetUser['username']]
-            );
-
-            // 7. Erfolg melden, JS leitet dann weiter
-            echo json_encode(['success' => true, 'redirectUrl' => Utils::url('dashboard')]);
-
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 400;
-            http_response_code($code);
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
+        }, [
+            'inputType' => 'json',
+            'checkRole' => 'admin'
+        ]);
     }
 }

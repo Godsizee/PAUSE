@@ -1,102 +1,107 @@
 <?php
 // app/Http/Controllers/CommunityController.php
 
+// MODIFIZIERT:
+// 1. ApiHandlerTrait importiert und verwendet.
+// 2. Alle API-Methoden (getPostsApi, getMyPostsApi, createPostApi, updatePostApi,
+//    approvePostApi, rejectPostApi, deletePostApi) nutzen jetzt handleApiRequest().
+// 3. inputType 'get' für Lesezugriffe, 'json' für Schreibzugriffe (da JS JSON sendet).
+// 4. Manuelle Security-Checks (requireLogin, verifyCsrfToken) wurden in die Trait-Optionen verlagert.
+// 5. Manuelle json_encode/decode, header() und try/catch-Blöcke entfernt.
+// 6. AuditLogger-Aufrufe in die 'log_action'-Rückgaben für den Trait umgewandelt.
+
 namespace App\Http\Controllers;
 
 use App\Core\Database;
-use App\Core\Security;
+use App\Core\Security; // Wird vom Trait intern genutzt
 use App\Repositories\CommunityPostRepository;
-use App\Services\AuditLogger;
+use App\Services\AuditLogger; // Import bleibt (wird vom Trait genutzt)
+use App\Http\Traits\ApiHandlerTrait; // NEU: Trait importieren
 use Exception;
 use PDO;
-use \Parsedown; // KORREKTUR: Parsedown aus dem globalen Namespace importieren
+use Parsedown; // KORRIGIERT: Backslash entfernt
 
 class CommunityController
 {
+    // NEU: Trait für API-Behandlung einbinden
+    use ApiHandlerTrait;
+
     private PDO $pdo;
     private CommunityPostRepository $postRepo;
-    private Parsedown $parsedown; // KORREKTUR: Typehint kann jetzt ohne Backslash sein
+    private Parsedown $parsedown;
 
     public function __construct()
     {
         $this->pdo = Database::getInstance();
         $this->postRepo = new CommunityPostRepository($this->pdo);
-        $this->parsedown = new Parsedown(); // KORREKTUR: Kann jetzt direkt verwendet werden
+        $this->parsedown = new Parsedown();
         $this->parsedown->setSafeMode(true);
     }
 
     /**
      * API: Holt die letzten 50 freigegebenen Beiträge für das Dashboard.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_GET.
      */
     public function getPostsApi()
     {
-        Security::requireLogin();
-        header('Content-Type: application/json');
-
-        try {
-            // KORREKTUR: Rufe die Methode im Repository auf, die E-Mails mitlädt
+        $this->handleApiRequest(function($data) { // $data ist $_GET
+            
             $posts = $this->postRepo->getApprovedPostsWithAuthorEmail(50);
 
-            // Konvertiere Markdown zu HTML
             foreach ($posts as &$post) {
                 $post['content_html'] = $this->parsedown->text($post['content'] ?? '');
             }
             unset($post);
 
-            echo json_encode(['success' => true, 'data' => $posts]);
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'data' => $posts]
+            ];
 
-        } catch (Exception $e) {
-            http_response_code(500);
-            error_log("API Error (getPostsApi): " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Laden der Beiträge.']);
-        }
-        exit();
+        }, [
+            'inputType' => 'get',
+            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin'] // Jede eingeloggte Rolle
+        ]);
     }
 
     /**
-     * NEU: API: Holt alle Beiträge, die vom aktuell eingeloggten Benutzer erstellt wurden.
+     * API: Holt alle Beiträge, die vom aktuell eingeloggten Benutzer erstellt wurden.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_GET.
      */
     public function getMyPostsApi()
     {
-        Security::requireLogin();
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist $_GET
+            
             $userId = $_SESSION['user_id'];
             $posts = $this->postRepo->getPostsByUserId($userId);
 
-            // Konvertiere Markdown zu HTML
             foreach ($posts as &$post) {
                 $post['content_html'] = $this->parsedown->text($post['content'] ?? '');
             }
             unset($post);
 
-            echo json_encode(['success' => true, 'data' => $posts]);
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'data' => $posts]
+            ];
 
-        } catch (Exception $e) {
-            http_response_code(500);
-            error_log("API Error (getMyPostsApi): " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Laden Ihrer Beiträge.']);
-        }
-        exit();
+        }, [
+            'inputType' => 'get',
+            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin'] // Jede eingeloggte Rolle
+        ]);
     }
-
 
     /**
      * API: Erstellt einen neuen Beitrag.
-     * Admins/Planer/Lehrer werden sofort freigeschaltet, Schüler müssen moderiert werden.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function createPostApi()
     {
-        Security::requireLogin();
-        Security::verifyCsrfToken();
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $userId = $_SESSION['user_id'];
             $userRole = $_SESSION['user_role'];
 
-            $data = json_decode(file_get_contents('php://input'), true);
             $title = trim($data['title'] ?? '');
             $content = trim($data['content'] ?? '');
 
@@ -104,48 +109,47 @@ class CommunityController
                 throw new Exception("Titel und Inhalt dürfen nicht leer sein.", 400);
             }
 
-            // Admins, Planer und Lehrer dürfen ohne Moderation posten
             $allowedToAutoApprove = ['admin', 'planer', 'lehrer'];
             $initialStatus = in_array($userRole, $allowedToAutoApprove) ? 'approved' : 'pending';
 
             $newPostId = $this->postRepo->createPost($userId, $title, $content, $initialStatus);
             
-            AuditLogger::log('create_community_post', 'community_post', $newPostId, [
-                'title' => $title,
-                'status' => $initialStatus
-            ]);
-
             $message = ($initialStatus === 'approved')
                 ? 'Beitrag erfolgreich veröffentlicht.'
                 : 'Beitrag wurde zur Moderation eingereicht.';
 
-            echo json_encode(['success' => true, 'message' => $message, 'status' => $initialStatus]);
+            // Log-Details
+            $logDetails = [
+                'title' => $title,
+                'status' => $initialStatus
+            ];
 
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500;
-            http_response_code($code);
-            error_log("API Error (createPostApi): " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Erstellen des Beitrags: ' . $e->getMessage()]);
-        }
-        exit();
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'message' => $message, 'status' => $initialStatus],
+                'log_action' => 'create_community_post',
+                'log_target_type' => 'community_post',
+                'log_target_id' => $newPostId,
+                'log_details' => $logDetails
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin'] // Jede eingeloggte Rolle
+        ]);
     }
 
     /**
-     * NEU: API: Aktualisiert einen bestehenden Beitrag.
-     * Nur der Ersteller (Schüler) oder Admins/Planer dürfen dies.
-     * Setzt den Status bei Schüler-Bearbeitung auf 'pending' zurück.
+     * API: Aktualisiert einen bestehenden Beitrag.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function updatePostApi()
     {
-        Security::requireLogin();
-        Security::verifyCsrfToken();
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $userId = $_SESSION['user_id'];
             $userRole = $_SESSION['user_role'];
 
-            $data = json_decode(file_get_contents('php://input'), true);
             $postId = filter_var($data['post_id'] ?? null, FILTER_VALIDATE_INT);
             $title = trim($data['title'] ?? '');
             $content = trim($data['content'] ?? '');
@@ -154,7 +158,6 @@ class CommunityController
                 throw new Exception("ID, Titel und Inhalt dürfen nicht leer sein.", 400);
             }
 
-            // Prüfe Berechtigung
             $post = $this->postRepo->getPostById($postId);
             if (!$post) {
                 throw new Exception("Beitrag nicht gefunden.", 404);
@@ -167,53 +170,55 @@ class CommunityController
                 throw new Exception("Sie sind nicht berechtigt, diesen Beitrag zu bearbeiten.", 403);
             }
 
-            // Wenn ein Schüler (der Besitzer ist) bearbeitet, auf 'pending' zurücksetzen.
-            // Admins/Planer dürfen bearbeiten, ohne den Status zu ändern.
             $newStatus = $post['status'];
             if ($isOwner && !$isModerator) {
                 $newStatus = 'pending';
             }
             
-            // Moderator-ID setzen, wenn ein Moderator bearbeitet, sonst NULL
             $moderatorId = $isModerator ? $userId : null;
 
+            // ANNAHME: Die 'updatePost'-Methode im Repository wurde (in V10) so angepasst,
+            // dass sie (int $postId, string $title, string $content, string $newStatus, ?int $moderatorId) akzeptiert.
             $success = $this->postRepo->updatePost($postId, $title, $content, $newStatus, $moderatorId);
 
-            if ($success) {
-                AuditLogger::log('update_community_post', 'community_post', $postId, [
-                    'title' => $title,
-                    'new_status' => $newStatus
-                ]);
-                $message = ($newStatus === 'pending')
-                    ? 'Beitrag aktualisiert und zur erneuten Moderation eingereicht.'
-                    : 'Beitrag erfolgreich aktualisiert.';
-                echo json_encode(['success' => true, 'message' => $message, 'new_status' => $newStatus]);
-            } else {
-                throw new Exception("Beitrag konnte nicht aktualisiert werden.", 500);
+            if (!$success) {
+                throw new Exception("Beitrag konnte nicht aktualisiert werden (möglicherweise keine Berechtigung oder Daten waren identisch).", 500);
             }
+            
+            $message = ($newStatus === 'pending')
+                ? 'Beitrag aktualisiert und zur erneuten Moderation eingereicht.'
+                : 'Beitrag erfolgreich aktualisiert.';
 
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500;
-            http_response_code($code);
-            error_log("API Error (updatePostApi): " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Aktualisieren: ' . $e->getMessage()]);
-        }
-        exit();
+            // Log-Details
+            $logDetails = [
+                'title' => $title,
+                'new_status' => $newStatus
+            ];
+
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'message' => $message, 'new_status' => $newStatus],
+                'log_action' => 'update_community_post',
+                'log_target_type' => 'community_post',
+                'log_target_id' => $postId,
+                'log_details' => $logDetails
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin'] // Jede eingeloggte Rolle
+        ]);
     }
-
 
     /**
      * API: Genehmigt einen Beitrag (Admin/Planer).
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function approvePostApi()
     {
-        Security::requireRole(['admin', 'planer']);
-        Security::verifyCsrfToken();
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $moderatorId = $_SESSION['user_id'];
-            $data = json_decode(file_get_contents('php://input'), true);
             $postId = filter_var($data['post_id'] ?? null, FILTER_VALIDATE_INT);
 
             if (!$postId) {
@@ -222,77 +227,76 @@ class CommunityController
 
             $success = $this->postRepo->updatePostStatus($postId, 'approved', $moderatorId);
 
-            if ($success) {
-                AuditLogger::log('approve_community_post', 'community_post', $postId);
-                echo json_encode(['success' => true, 'message' => 'Beitrag freigegeben.']);
-            } else {
+            if (!$success) {
                 throw new Exception("Beitrag konnte nicht freigegeben werden (vielleicht schon moderiert?).", 404);
             }
+            
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'message' => 'Beitrag freigegeben.'],
+                'log_action' => 'approve_community_post',
+                'log_target_type' => 'community_post',
+                'log_target_id' => $postId
+            ];
 
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500;
-            http_response_code($code);
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['admin', 'planer']
+        ]);
     }
     
     /**
      * API: Lehnt einen Beitrag ab (Admin/Planer).
-     * KORRIGIERT: Setzt Status auf 'rejected' statt zu löschen.
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function rejectPostApi()
     {
-        Security::requireRole(['admin', 'planer']);
-        Security::verifyCsrfToken();
-        header('Content-Type: application/json');
-
-        try {
-            $moderatorId = $_SESSION['user_id']; // Für Logging
-            $data = json_decode(file_get_contents('php://input'), true);
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
+            $moderatorId = $_SESSION['user_id'];
             $postId = filter_var($data['post_id'] ?? null, FILTER_VALIDATE_INT);
 
             if (!$postId) {
                 throw new Exception("Ungültige Beitrags-ID.", 400);
             }
             
-            // Optional: Daten für Log holen
             $post = $this->postRepo->getPostById($postId);
-
-            // Status auf 'rejected' setzen
             $success = $this->postRepo->updatePostStatus($postId, 'rejected', $moderatorId);
 
-            if ($success) {
-                AuditLogger::log('reject_community_post', 'community_post', $postId, ['title' => $post['title'] ?? 'N/A']);
-                echo json_encode(['success' => true, 'message' => 'Beitrag abgelehnt.']);
-            } else {
+            if (!$success) {
                 throw new Exception("Beitrag konnte nicht abgelehnt werden (vielleicht schon moderiert?).", 404);
             }
 
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500;
-            http_response_code($code);
-            echo json_encode(['success' => false, 'message' => $e->getMessage()]);
-        }
-        exit();
+            // Log-Details
+            $logDetails = ['title' => $post['title'] ?? 'N/A'];
+
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'message' => 'Beitrag abgelehnt.'],
+                'log_action' => 'reject_community_post',
+                'log_target_type' => 'community_post',
+                'log_target_id' => $postId,
+                'log_details' => $logDetails
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['admin', 'planer']
+        ]);
     }
 
     /**
-     * NEU: API: Löscht einen Beitrag (Admin, Planer oder Ersteller).
+     * API: Löscht einen Beitrag (Admin, Planer oder Ersteller).
+     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist geparstes JSON.
      */
     public function deletePostApi()
     {
-        Security::requireLogin();
-        Security::verifyCsrfToken();
-        header('Content-Type: application/json');
-
-        try {
+        $this->handleApiRequest(function($data) { // $data ist JSON-Body
+            
             $userId = $_SESSION['user_id'];
             $userRole = $_SESSION['user_role'];
 
-            $data = json_decode(file_get_contents('php://input'), true);
             $postId = filter_var($data['post_id'] ?? null, FILTER_VALIDATE_INT);
-
             if (!$postId) {
                 throw new Exception("Ungültige Beitrags-ID.", 400);
             }
@@ -309,28 +313,29 @@ class CommunityController
                 throw new Exception("Sie sind nicht berechtigt, diesen Beitrag zu löschen.", 403);
             }
 
-            // Admins/Planer dürfen immer löschen, Besitzer nur, wenn er nicht 'rejected' ist?
-            // Aktuelle Logik: Besitzer darf immer löschen.
-            
             $success = $this->postRepo->deletePost($postId);
-
-            if ($success) {
-                AuditLogger::log('delete_community_post', 'community_post', $postId, [
-                    'title' => $post['title'] ?? 'N/A',
-                    'deleted_by' => $userRole
-                ]);
-                echo json_encode(['success' => true, 'message' => 'Beitrag erfolgreich gelöscht.']);
-            } else {
+            if (!$success) {
                 throw new Exception("Beitrag konnte nicht gelöscht werden.", 500);
             }
 
-        } catch (Exception $e) {
-            $code = ($e->getCode() >= 400 && $e->getCode() < 600) ? $e->getCode() : 500;
-            http_response_code($code);
-            error_log("API Error (deletePostApi): " . $e->getMessage());
-            echo json_encode(['success' => false, 'message' => 'Fehler beim Löschen: ' . $e->getMessage()]);
-        }
-        exit();
+            // Log-Details
+            $logDetails = [
+                'title' => $post['title'] ?? 'N/A',
+                'deleted_by' => $userRole
+            ];
+
+            // Rückgabe für Trait
+            return [
+                'json_response' => ['success' => true, 'message' => 'Beitrag erfolgreich gelöscht.'],
+                'log_action' => 'delete_community_post',
+                'log_target_type' => 'community_post',
+                'log_target_id' => $postId,
+                'log_details' => $logDetails
+            ];
+
+        }, [
+            'inputType' => 'json',
+            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin'] // Jede eingeloggte Rolle
+        ]);
     }
 }
-
