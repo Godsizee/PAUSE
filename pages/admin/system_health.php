@@ -1,21 +1,13 @@
 <?php
-// pages/admin/system_health.php
-// NEU ERSTELLT
 include_once dirname(__DIR__) . '/partials/header.php';
-// $data (Array) wird vom SystemHealthController::index() übergeben
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">System-Status</h1>
     <div class="dashboard-grid">
-        
         <?php include_once __DIR__ . '/partials/_sidebar.php'; ?>
-
         <main class="dashboard-content" id="system-health-management">
             <div class="dashboard-section active">
-                
                 <div class="health-grid">
-
                     <div class="health-widget widget-server">
                         <h3>Server & Datenbank</h3>
                         <ul class="health-list">
@@ -53,7 +45,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                             </li>
                         </ul>
                     </div>
-
                     <div class="health-widget widget-extensions">
                         <h3>PHP-Erweiterungen</h3>
                         <ul class="health-list">
@@ -73,7 +64,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                             <?php endforeach; ?>
                         </ul>
                     </div>
-                    
                     <div class="health-widget widget-permissions">
                         <h3>Verzeichnis-Berechtigungen</h3>
                         <ul class="health-list">
@@ -93,13 +83,11 @@ include_once dirname(__DIR__) . '/partials/header.php';
                             <?php endforeach; ?>
                         </ul>
                     </div>
-
                 </div>
             </div>
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

@@ -1,16 +1,5 @@
 <?php
-// app/Http/Controllers/TeacherController.php
-
-// MODIFIZIERT:
-// 1. AppointmentService importiert und im Konstruktor injiziert.
-// 2. AppointmentRepository entfernt (wird jetzt vom Service verwaltet).
-// 3. Methoden getOfficeHoursApi, saveOfficeHoursApi, deleteOfficeHoursApi
-//    refaktorisiert, um den AppointmentService zu nutzen.
-// 4. Geschäftslogik und Validierung aus den Callbacks entfernt und
-//    in den Service verschoben.
-
 namespace App\Http\Controllers;
-
 use App\Core\Database;
 use App\Core\Security;
 use App\Core\Utils;
@@ -18,13 +7,13 @@ use App\Repositories\StammdatenRepository;
 use App\Repositories\PlanRepository;
 use App\Repositories\UserRepository;
 use App\Repositories\AttendanceRepository;
-use App\Services\AppointmentService; // NEU
+use App\Repositories\AppointmentRepository;
 use App\Services\AuditLogger;
-use App\Http\Traits\ApiHandlerTrait;
 use Exception;
 use PDO;
 use DateTime;
 use DateTimeZone;
+use App\Http\Traits\ApiHandlerTrait;
 
 class TeacherController
 {
@@ -35,7 +24,7 @@ class TeacherController
     private PlanRepository $planRepo;
     private UserRepository $userRepo;
     private AttendanceRepository $attendanceRepo;
-    private AppointmentService $appointmentService; // NEU
+    private AppointmentRepository $appointmentRepo;
 
     public function __construct()
     {
@@ -44,60 +33,44 @@ class TeacherController
         $this->planRepo = new PlanRepository($this->pdo);
         $this->userRepo = new UserRepository($this->pdo);
         $this->attendanceRepo = new AttendanceRepository($this->pdo);
-        
-        // NEU: AppointmentService instanziieren (benötigt Repos)
-        $this->appointmentService = new AppointmentService(
-            new \App\Repositories\AppointmentRepository($this->pdo), // Repository hier übergeben
-            $this->userRepo
-        );
+        $this->appointmentRepo = new AppointmentRepository($this->pdo);
     }
 
-    /**
-     * API: Sucht nach Lehrern (für Schüler oder Lehrer).
-     * (Unverändert)
-     */
     public function searchColleaguesApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
-            
+        $this->handleApiRequest(function($data) { // $data kommt von $_GET
             $query = filter_var($data['query'] ?? '', FILTER_UNSAFE_RAW);
             
             $allTeachers = $this->stammdatenRepo->getTeachers();
-            
             $filteredTeachers = [];
+
             if (!empty($query)) {
                 $filteredTeachers = array_filter($allTeachers, function($teacher) use ($query) {
                     $fullName = $teacher['first_name'] . ' ' . $teacher['last_name'];
-                    return stripos($fullName, $query) !== false || 
+                    return stripos($fullName, $query) !== false ||
                            stripos($teacher['teacher_shortcut'], $query) !== false;
                 });
             } else {
                 $filteredTeachers = array_slice($allTeachers, 0, 10);
             }
-
-            return [
-                'json_response' => ['success' => true, 'data' => array_values($filteredTeachers)]
-            ];
-
+            
+            echo json_encode(['success' => true, 'data' => array_values($filteredTeachers)]);
+            
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => ['lehrer', 'schueler']
         ]);
     }
 
-    /**
-     * API: Findet den aktuellen Aufenthaltsort (Stunde/Raum) eines Lehrers.
-     * (Unverändert)
-     */
     public function findColleagueApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
-            
+        $this->handleApiRequest(function($data) { // $data kommt von $_GET
             $teacherId = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
             if (!$teacherId) {
                 throw new Exception("Keine Lehrer-ID angegeben.", 400);
             }
-
+            
             $now = new DateTime('now', new DateTimeZone('Europe/Berlin'));
             $currentDate = $now->format('Y-m-d');
             $currentYear = (int)$now->format('o');
@@ -107,12 +80,11 @@ class TeacherController
             $currentPeriod = $this->getCurrentPeriod($currentHourMinute);
 
             if ($currentDayOfWeek > 5 || $currentPeriod === null) {
-                return [
-                    'json_response' => ['success' => true, 'data' => [
-                        'status' => 'Außerhalb der Zeit',
-                        'message' => 'Der Kollege befindet sich wahrscheinlich nicht im Unterricht (Wochenende oder außerhalb der Unterrichtszeit).'
-                    ]]
-                ];
+                echo json_encode(['success' => true, 'data' => [
+                    'status' => 'Außerhalb der Zeit',
+                    'message' => 'Der Kollege befindet sich wahrscheinlich nicht im Unterricht (Wochenende oder außerhalb der Unterrichtszeit).'
+                ]]);
+                return ['is_get_request' => true];
             }
 
             $lessonInfo = $this->planRepo->findTeacherLocation(
@@ -123,31 +95,25 @@ class TeacherController
                 $currentDayOfWeek,
                 $currentPeriod
             );
-            
+
             $message = $this->formatLessonInfo($lessonInfo);
-
-            return [
-                'json_response' => ['success' => true, 'data' => [
-                    'status' => $lessonInfo['status'],
-                    'message' => $message,
-                    'details' => $lessonInfo['data'] ?? null
-                ]]
-            ];
-
+            
+            echo json_encode(['success' => true, 'data' => [
+                'status' => $lessonInfo['status'],
+                'message' => $message,
+                'details' => $lessonInfo['data'] ?? null
+            ]]);
+            
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'lehrer'
         ]);
     }
-    
-    /**
-     * API: Holt die aktuelle Stunde des Lehrers UND die Schülerliste dafür.
-     * (Unverändert)
-     */
+
     public function getCurrentLessonWithStudentsApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
-            
+        $this->handleApiRequest(function($data) {
             $user = $this->userRepo->findById($_SESSION['user_id']);
             if (!$user || !$user['teacher_id']) {
                 throw new Exception("Kein gültiges Lehrerprofil gefunden.", 403);
@@ -161,13 +127,12 @@ class TeacherController
             $currentDayOfWeek = (int)$now->format('N');
             $currentHourMinute = (int)$now->format('Hi');
             $currentPeriod = $this->getCurrentPeriod($currentHourMinute);
-            
+
             if ($currentDayOfWeek > 5 || $currentPeriod === null) {
-                return [
-                    'json_response' => ['success' => true, 'data' => ['status' => 'Außerhalb der Zeit', 'lesson' => null, 'students' => []]]
-                ];
+                echo json_encode(['success' => true, 'data' => ['status' => 'Außerhalb der Zeit', 'lesson' => null, 'students' => []]]);
+                return ['is_get_request' => true];
             }
-            
+
             $lessonInfo = $this->planRepo->findTeacherLocation(
                 $teacherId,
                 $currentDate,
@@ -176,47 +141,34 @@ class TeacherController
                 $currentDayOfWeek,
                 $currentPeriod
             );
-            
+
             if ($lessonInfo['status'] === 'Unterricht' || $lessonInfo['status'] === 'Vertretung') {
                 $lessonData = $lessonInfo['data'];
-                // KORREKTUR: Daten können ein Array sein (parallele Kurse)
-                // Wir nehmen den ersten Eintrag für die Anwesenheit
-                $lessonToUse = is_array($lessonData) ? $lessonData[0] : $lessonData;
-                $classId = $lessonToUse['class_id'];
-                
+                $classId = $lessonData['class_id'];
                 $students = $this->userRepo->getStudentsByClassId($classId);
                 $attendance = $this->attendanceRepo->getAttendance($classId, $currentDate, $currentPeriod);
                 
-                return [
-                    'json_response' => ['success' => true, 'data' => [
-                        'status' => $lessonInfo['status'],
-                        'lesson' => $lessonToUse, // Nur den ersten Eintrag senden
-                        'students' => $students,
-                        'attendance' => $attendance,
-                        'context' => ['date' => $currentDate, 'period' => $currentPeriod]
-                    ]]
-                ];
-
+                echo json_encode(['success' => true, 'data' => [
+                    'status' => $lessonInfo['status'],
+                    'lesson' => $lessonData,
+                    'students' => $students,
+                    'attendance' => $attendance,
+                    'context' => ['date' => $currentDate, 'period' => $currentPeriod]
+                ]]);
             } else {
-                return [
-                    'json_response' => ['success' => true, 'data' => ['status' => $lessonInfo['status'], 'lesson' => null, 'students' => []]]
-                ];
+                echo json_encode(['success' => true, 'data' => ['status' => $lessonInfo['status'], 'lesson' => null, 'students' => []]]);
             }
-
+            
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'lehrer'
         ]);
     }
-    
-    /**
-     * API: Speichert die Anwesenheitsliste.
-     * (Unverändert)
-     */
+
     public function saveAttendanceApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist JSON-Body
-            
+        $this->handleApiRequest(function($data) { // $data kommt von JSON
             $user = $this->userRepo->findById($_SESSION['user_id']);
             if (!$user || !$user['teacher_id']) {
                 throw new Exception("Kein gültiges Lehrerprofil gefunden.", 403);
@@ -231,7 +183,7 @@ class TeacherController
             if (!$classId || !$date || !$period || empty($students) || !is_array($students)) {
                 throw new Exception("Fehlende oder ungültige Daten (Klasse, Datum, Stunde oder Schülerliste).", 400);
             }
-            
+
             $success = $this->attendanceRepo->saveAttendance(
                 $teacherUserId,
                 $classId,
@@ -239,39 +191,31 @@ class TeacherController
                 $period,
                 $students
             );
-
-            if (!$success) {
-                throw new Exception("Anwesenheit konnte nicht gespeichert werden.", 500);
+            
+            if ($success) {
+                echo json_encode(['success' => true, 'message' => 'Anwesenheit gespeichert!']);
+                return [
+                    'log_action' => 'save_attendance',
+                    'log_target_type' => 'class',
+                    'log_target_id' => $classId,
+                    'log_details' => [
+                        'date' => $date,
+                        'period' => $period,
+                        'student_count' => count($students)
+                    ]
+                ];
+            } else {
+                throw new Exception("Anwesenheit konnte nicht gespeichert werden.");
             }
-
-            $logDetails = [
-                'date' => $date, 
-                'period' => $period, 
-                'student_count' => count($students)
-            ];
-
-            return [
-                'json_response' => ['success' => true, 'message' => 'Anwesenheit gespeichert!'],
-                'log_action' => 'save_attendance',
-                'log_target_type' => 'class',
-                'log_target_id' => $classId,
-                'log_details' => $logDetails
-            ];
-
         }, [
             'inputType' => 'json',
             'checkRole' => 'lehrer'
         ]);
     }
     
-    /**
-     * API: Holt die Voraussetzungen (Fächer und unterrichtete Klassen) für das Event-Formular.
-     * (Unverändert)
-     */
     public function getPrerequisitesApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
-            
+        $this->handleApiRequest(function($data) {
             $user = $this->userRepo->findById($_SESSION['user_id']);
             if (!$user || !$user['teacher_id']) {
                 throw new Exception("Kein gültiges Lehrerprofil gefunden.", 403);
@@ -281,110 +225,119 @@ class TeacherController
             $subjects = $this->stammdatenRepo->getSubjects();
             $classes = $this->planRepo->getClassesForTeacher($teacherId);
 
-            return [
-                'json_response' => [
-                    'success' => true,
-                    'data' => [
-                        'subjects' => $subjects,
-                        'classes' => $classes
-                    ]
+            echo json_encode([
+                'success' => true,
+                'data' => [
+                    'subjects' => $subjects,
+                    'classes' => $classes
                 ]
-            ];
-
+            ]);
+            
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'lehrer'
         ]);
     }
 
-    // --- SPRECHSTUNDEN (Refaktorisiert auf AppointmentService) ---
-
-    /**
-     * API: Holt die definierten Sprechstundenfenster des eingeloggten Lehrers.
-     * MODIFIZIERT: Nutzt AppointmentService.
-     */
     public function getOfficeHoursApi()
     {
         $this->handleApiRequest(function($data) {
-            
             $teacherUserId = $_SESSION['user_id'];
-            // Logik ausgelagert:
-            $availabilities = $this->appointmentService->getAvailabilities($teacherUserId);
+            $availabilities = $this->appointmentRepo->getAvailabilities($teacherUserId);
+            echo json_encode(['success' => true, 'data' => $availabilities]);
             
-            return [
-                'json_response' => ['success' => true, 'data' => $availabilities]
-            ];
-
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'lehrer'
         ]);
     }
 
-    /**
-     * API: Speichert ein neues Sprechstundenfenster für den eingeloggten Lehrer.
-     * MODIFIZIERT: Nutzt AppointmentService.
-     */
     public function saveOfficeHoursApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist JSON-Body
-            
+        $this->handleApiRequest(function($data) { // $data kommt von JSON
             $teacherUserId = $_SESSION['user_id'];
+            $dayOfWeek = filter_var($data['day_of_week'] ?? null, FILTER_VALIDATE_INT);
+            $startTime = $data['start_time'] ?? null;
+            $endTime = $data['end_time'] ?? null;
+            $slotDuration = filter_var($data['slot_duration'] ?? 15, FILTER_VALIDATE_INT);
+            $location = isset($data['location']) ? trim($data['location']) : null;
+
+            if (!$dayOfWeek || !$startTime || !$endTime || !$slotDuration || $dayOfWeek < 1 || $dayOfWeek > 5 || $slotDuration < 5 || empty($location)) {
+                throw new Exception("Ungültige Eingabedaten. Alle Felder (Tag, Zeiten, Dauer, Ort) sind erforderlich.", 400);
+            }
+
+            $newId = $this->appointmentRepo->createAvailability($teacherUserId, $dayOfWeek, $startTime, $endTime, $slotDuration, $location);
             
-            // Logik und Validierung ausgelagert:
-            // Service wirft Exception bei ungültigen Daten
-            $newId = $this->appointmentService->createAvailability($teacherUserId, $data);
-            
+            echo json_encode(['success' => true, 'message' => 'Sprechzeit erfolgreich gespeichert.', 'data' => ['availability_id' => $newId]]);
+
             return [
-                'json_response' => ['success' => true, 'message' => 'Sprechzeit erfolgreich gespeichert.', 'data' => ['availability_id' => $newId]],
                 'log_action' => 'create_office_hours',
                 'log_target_type' => 'teacher_availability',
                 'log_target_id' => $newId,
                 'log_details' => $data
             ];
-
         }, [
             'inputType' => 'json',
             'checkRole' => 'lehrer'
         ]);
     }
 
-    /**
-     * API: Löscht ein Sprechstundenfenster des eingeloggten Lehrers.
-     * MODIFIZIERT: Nutzt AppointmentService.
-     */
     public function deleteOfficeHoursApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist JSON-Body
-            
+        $this->handleApiRequest(function($data) { // $data kommt von JSON
             $teacherUserId = $_SESSION['user_id'];
             $availabilityId = filter_var($data['availability_id'] ?? null, FILTER_VALIDATE_INT);
 
-            // Logik und Validierung ausgelagert:
-            // Service wirft Exception bei 400 (fehlende ID) oder 404 (nicht gefunden)
-            $this->appointmentService->deleteAvailability($teacherUserId, $availabilityId);
-            
-            return [
-                'json_response' => ['success' => true, 'message' => 'Sprechzeit erfolgreich gelöscht.'],
-                'log_action' => 'delete_office_hours',
-                'log_target_type' => 'teacher_availability',
-                'log_target_id' => $availabilityId
-            ];
+            if (!$availabilityId) {
+                throw new Exception("Keine ID angegeben.", 400);
+            }
 
+            $success = $this->appointmentRepo->deleteAvailability($availabilityId, $teacherUserId);
+            
+            if ($success) {
+                echo json_encode(['success' => true, 'message' => 'Sprechzeit erfolgreich gelöscht.']);
+                return [
+                    'log_action' => 'delete_office_hours',
+                    'log_target_type' => 'teacher_availability',
+                    'log_target_id' => $availabilityId
+                ];
+            } else {
+                throw new Exception("Sprechzeit nicht gefunden oder keine Berechtigung.", 404);
+            }
         }, [
             'inputType' => 'json',
             'checkRole' => 'lehrer'
         ]);
     }
 
-    
-    /**
-     * Hilfsfunktion: Wandelt 'Hi'-Zeitstempel in Periodennummer um.
-     * (Unverändert)
-     */
+    public function getAllAppointmentsApi()
+    {
+        $this->handleApiRequest(function($data) {
+            $teacherUserId = $_SESSION['user_id'];
+            $now = (new DateTime('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d H:i:s');
+            
+            // Zukünftige/Heutige Termine (Neueste zuerst -> DESC)
+            $allAppointments = $this->appointmentRepo->getAllAppointmentsForTeacher($teacherUserId, 'DESC');
+            
+            $futureAppointments = array_filter($allAppointments, fn($app) => $app['appointment_date'] . ' ' . $app['appointment_time'] >= $now);
+            $pastAppointments = array_filter($allAppointments, fn($app) => $app['appointment_date'] . ' ' . $app['appointment_time'] < $now);
+
+            echo json_encode(['success' => true, 'data' => [
+                'future' => array_values($futureAppointments),
+                'past' => array_values($pastAppointments)
+            ]]);
+            
+            return ['is_get_request' => true];
+        }, [
+            'inputType' => 'get',
+            'checkRole' => 'lehrer'
+        ]);
+    }
+
     private function getCurrentPeriod(int $hourMinute): ?int
     {
-        // (Zeiten wie zuvor)
         if ($hourMinute >= 800 && $hourMinute <= 845) return 1;
         if ($hourMinute >= 855 && $hourMinute <= 940) return 2;
         if ($hourMinute >= 940 && $hourMinute <= 1025) return 3;
@@ -397,23 +350,10 @@ class TeacherController
         if ($hourMinute >= 1625 && $hourMinute <= 1710) return 10;
         return null;
     }
-    
-    /**
-     * Hilfsfunktion: Formatiert Standort-Info.
-     * (Unverändert)
-     */
+
     private function formatLessonInfo(array $info): string
     {
-        // KORREKTUR: Muss mit Array von $info['data'] umgehen (parallele Kurse)
         $data = $info['data'] ?? null;
-        
-        // Wenn $data ein Array ist (parallele Kurse), nimm den ersten Eintrag
-        if (is_array($data) && isset($data[0])) {
-             $data = $data[0];
-             // Optional: Nachricht anpassen, um Mehrfachbelegung anzuzeigen
-             // z.B.: $info['status'] = "Unterricht (parallel)";
-        }
-        
         switch ($info['status']) {
             case 'Unterricht':
                 return sprintf(
@@ -443,7 +383,7 @@ class TeacherController
                     htmlspecialchars($data['new_room_name'] ?? '?')
                 );
             case 'Sonderevent':
-                 return sprintf(
+                return sprintf(
                     "Nimmt am Sonderevent '%s' (Klasse %s) in Raum %s teil.",
                     htmlspecialchars($data['comment'] ?? 'Event'),
                     htmlspecialchars($data['class_name'] ?? '?'),

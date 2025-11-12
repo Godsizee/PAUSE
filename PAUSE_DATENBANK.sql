@@ -59,6 +59,7 @@ CREATE TABLE users (
     birth_date    DATE         NULL COMMENT 'Geburtsdatum, hauptsächlich für Schüler',
     class_id      INT          NULL COMMENT 'FK zu classes. Nur für Schüler relevant.',
     teacher_id    INT          NULL COMMENT 'FK zu teachers. Nur für Lehrer-Accounts relevant.',
+    is_community_banned TINYINT(1) NOT NULL DEFAULT 0,
     ical_token    VARCHAR(64)  NULL DEFAULT NULL UNIQUE COMMENT 'Sicherer Token für iCal-Feed',
     created_at    TIMESTAMP    DEFAULT CURRENT_TIMESTAMP COMMENT 'Zeitpunkt der Accounterstellung',
     CONSTRAINT fk_users_class FOREIGN KEY (class_id) REFERENCES classes(class_id) ON DELETE SET NULL,
@@ -84,7 +85,7 @@ CREATE TABLE timetable_publish_status (
 -- -----------------------------------------------------------------------------
 CREATE TABLE timetable_entries (
     entry_id      INT     PRIMARY KEY AUTO_INCREMENT,
-    `year`          YEAR    NOT NULL COMMENT 'Das Gültigkeitsjahr des Eintrags',
+    `year`        YEAR    NOT NULL COMMENT 'Das Gültigkeitsjahr des Eintrags',
     calendar_week TINYINT NOT NULL COMMENT 'Die Kalenderwoche (1-53) der Gültigkeit',
     day_of_week   TINYINT NOT NULL COMMENT '1=Montag, 2=Dienstag, ..., 5=Freitag',
     period_number TINYINT NOT NULL COMMENT 'Die jeweilige Unterrichtsstunde (z.B. 1 bis 10)',
@@ -146,7 +147,6 @@ CREATE TABLE `announcements` (
   `file_path` VARCHAR(512) NULL DEFAULT NULL COMMENT 'Path to attachment',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `is_global` tinyint(1) NOT NULL DEFAULT 0 COMMENT '1 for global announcements, 0 for class-specific',
-  -- `target_role` ENUM('all', 'schueler', 'lehrer', 'planer') NOT NULL DEFAULT 'all' COMMENT 'Specific role target (used if is_global = 1)',
   PRIMARY KEY (`announcement_id`),
   KEY `user_id_fk` (`user_id`),
   KEY `class_id_fk` (`class_id`),
@@ -155,7 +155,7 @@ CREATE TABLE `announcements` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- -----------------------------------------------------------------------------
--- NEU: Tabelle: timetable_templates (Stundenplan-Vorlagen)
+-- Tabelle: timetable_templates (Stundenplan-Vorlagen)
 -- -----------------------------------------------------------------------------
 CREATE TABLE timetable_templates (
     template_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -164,7 +164,7 @@ CREATE TABLE timetable_templates (
 ) ENGINE=InnoDB COMMENT='Speichert die Stammdaten für Stundenplan-Vorlagen.';
 
 -- -----------------------------------------------------------------------------
--- NEU: Tabelle: timetable_template_entries (Einträge für Vorlagen)
+-- Tabelle: timetable_template_entries (Einträge für Vorlagen)
 -- -----------------------------------------------------------------------------
 CREATE TABLE timetable_template_entries (
     template_entry_id INT PRIMARY KEY AUTO_INCREMENT,
@@ -178,16 +178,16 @@ CREATE TABLE timetable_template_entries (
     block_ref         VARCHAR(50) NULL DEFAULT NULL COMMENT 'Eindeutige Referenz (pro Vorlage) für Blockstunden',
     `comment`         VARCHAR(255) NULL DEFAULT NULL,
     FOREIGN KEY (template_id) REFERENCES timetable_templates(template_id) ON DELETE CASCADE,
-    FOREIGN KEY (class_id)    REFERENCES classes(class_id)    ON DELETE CASCADE,
+    FOREIGN KEY (class_id)    REFERENCES classes(class_id)   ON DELETE CASCADE,
     FOREIGN KEY (teacher_id)  REFERENCES teachers(teacher_id)  ON DELETE CASCADE,
     FOREIGN KEY (subject_id)  REFERENCES subjects(subject_id)  ON DELETE CASCADE,
-    FOREIGN KEY (room_id)     REFERENCES rooms(room_id)       ON DELETE CASCADE,
+    FOREIGN KEY (room_id)     REFERENCES rooms(room_id)      ON DELETE CASCADE,
     INDEX `idx_template_id` (`template_id`)
 ) ENGINE=InnoDB COMMENT='Speichert die einzelnen Einträge einer Stundenplan-Vorlage.';
 
 
 -- -----------------------------------------------------------------------------
--- NEU: Tabelle: audit_logs (Protokollierung)
+-- Tabelle: audit_logs (Protokollierung)
 -- -----------------------------------------------------------------------------
 CREATE TABLE audit_logs (
     log_id      INT PRIMARY KEY AUTO_INCREMENT,
@@ -274,6 +274,7 @@ CREATE TABLE teacher_availability (
     start_time       TIME NOT NULL COMMENT 'z.B. 14:00:00',
     end_time         TIME NOT NULL COMMENT 'z.B. 15:00:00',
     slot_duration    INT NOT NULL DEFAULT 15 COMMENT 'Dauer eines Slots in Minuten (z.B. 15)',
+    location         VARCHAR(100) NULL DEFAULT NULL COMMENT 'Raum oder Ort (z.B. Online, R201)',
     
     FOREIGN KEY (teacher_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     
@@ -289,15 +290,18 @@ CREATE TABLE appointments (
     appointment_id    INT PRIMARY KEY AUTO_INCREMENT,
     teacher_user_id   INT NOT NULL COMMENT 'FK zu users (Lehrer)',
     student_user_id   INT NOT NULL COMMENT 'FK zu users (Schüler)',
+    availability_id   INT NOT NULL COMMENT 'FK zur gebuchten Verfügbarkeit',
     appointment_date  DATE NOT NULL COMMENT 'Konkretes Datum des Termins',
     appointment_time  TIME NOT NULL COMMENT 'Konkrete Startzeit des Termins (z.B. 14:15:00)',
     duration          INT NOT NULL COMMENT 'Dauer des Termins in Minuten (aus availability)',
+    location          VARCHAR(100) NULL DEFAULT NULL COMMENT 'Gebuchter Raum/Ort zum Zeitpunkt der Buchung',
     notes             TEXT NULL COMMENT 'Optionale Notiz des Schülers',
     status            ENUM('booked', 'cancelled_by_teacher', 'cancelled_by_student') NOT NULL DEFAULT 'booked',
     created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     
     FOREIGN KEY (teacher_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
     FOREIGN KEY (student_user_id) REFERENCES users(user_id) ON DELETE CASCADE,
+    FOREIGN KEY (availability_id) REFERENCES teacher_availability(availability_id) ON DELETE CASCADE,
     
     -- Verhindert, dass ein Slot (Lehrer, Datum, Zeit) doppelt gebucht wird
     UNIQUE KEY `unique_appointment_slot` (`teacher_user_id`, `appointment_date`, `appointment_time`),
@@ -365,9 +369,7 @@ CREATE TABLE `teacher_absences` (
   CONSTRAINT `fk_teacher_absences_planner` FOREIGN KEY (`planner_user_id`) REFERENCES `users` (`user_id`) ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- Fügt die Spalte hinzu, um Benutzer zu sperren
-ALTER TABLE `users`
-ADD COLUMN `is_community_banned` TINYINT(1) NOT NULL DEFAULT 0 AFTER `teacher_id`;
+
 
 -- Fügt die globale Einstellung hinzu (falls nicht schon vorhanden)
 INSERT INTO `settings` (setting_key, setting_value)
@@ -431,7 +433,7 @@ INSERT INTO `subjects` (`subject_shortcut`, `subject_name`) VALUES
 ('SYS LIN', 'Systeme Linux'),
 ('BWSS', 'Betriebswirtschaftliche Standardsoftware'),
 ('INC', 'Bewerbungstraining'), -- KORRIGIERT
-('CAD', 'CAD')
+('CAD', 'CAD'),
 ('SGL', 'Selbstgesteuertes Lernen')
 ON DUPLICATE KEY UPDATE
     subject_name = VALUES(subject_name);
@@ -452,31 +454,33 @@ ON DUPLICATE KEY UPDATE
 
 -- 2. Klassen anlegen
 INSERT INTO `classes` (`class_id`, `class_name`, `class_teacher_id`) VALUES
-(2341, 'FIA', NULL),
-(2342, 'FIA', NULL),
-(2351, 'FIA', NULL),
-(2441, 'FIS', NULL),
-(2442, 'FIS', NULL),
-(2451, 'FIS', NULL),
-(2452, 'FIS', NULL),
-(2541, 'WI', NULL),
-(2551, 'WI', NULL),
-(3241, 'QF', NULL),
-(3242, 'QF', NULL),
-(3251, 'QF', NULL),
-(3252, 'QF', NULL),
-(3441, 'TPD', NULL),
-(3442, 'TPD', NULL),
-(3451, 'TPD', NULL),
-(3452, 'TPD', NULL);
-
+(2341, 'FIA-23/1', NULL),
+(2342, 'FIA-23/2', NULL),
+(2351, 'FIA-23/3', NULL),
+(2441, 'FIS-24/1', NULL),
+(2442, 'FIS-24/2', NULL),
+(2451, 'FIS-23/1', NULL),
+(2452, 'FIS-23/2', NULL),
+(2541, 'WI-24/1', NULL),
+(2551, 'WI-23/1', NULL),
+(3241, 'QF-24/1', NULL),
+(3242, 'QF-24/2', NULL),
+(3251, 'QF-23/1', NULL),
+(3252, 'QF-23/2', NULL),
+(3441, 'TPD-24/1', NULL),
+(3442, 'TPD-24/2', NULL),
+(3451, 'TPD-23/1', NULL),
+(3452, 'TPD-23/2', NULL)
+ON DUPLICATE KEY UPDATE
+    class_name = VALUES(class_name),
+    class_teacher_id = VALUES(class_teacher_id);
 
 -- 3. Benutzer anlegen
 INSERT INTO `users` (`user_id`, `username`, `email`, `password_hash`, `role`, `first_name`, `last_name`, `class_id`, `teacher_id`)
 VALUES 
 (1, 'admin', 'admin@pause.local', '$2y$10$LVYG9cdULLOBWp29HywZsO1Xh8e5tMQ0aqB177aHc.dT32UYlxRt.', 'admin', 'Admin', 'User', NULL, NULL),
 (2, 'planer', 'planer@pause.local', '$2y$10$LVYG9cdULLOBWp29HywZsO1Xh8e5tMQ0aqB177aHc.dT32UYlxRt.', 'planer', 'Planer', 'User', NULL, NULL),
-(3, 'lars.lehrer', 'lars.lehrer@schule.de', '$2y$10$LVYG9cdULLOBWp29HywZsO1Xh8e5tMQ0aqB177aHc.dT32UYlxRt.', 'lehrer', 'Lars', 'Lehrer', NULL, 1),
+(3, 'abilash.roy', 'abilash.roy@srh.de', '$2y$10$LVYG9cdULLOBWp29HywZsO1Xh8e5tMQ0aqB177aHc.dT32UYlxRt.', 'lehrer', 'Abilash', 'Roy Nalpatamkalam', NULL, 1),
 (4, 'susi.schueler', 'susi.schueler@schule.de', '$2y$10$LVYG9cdULLOBWp29HywZsO1Xh8e5tMQ0aqB177aHc.dT32UYlxRt.', 'schueler', 'Susi', 'Schüler', 2341, NULL),
 (5, 'max.mustermann', 'max.mustermann@schule.de', '$2y$10$LVYG9cdULLOBWp29HywZsO1Xh8e5tMQ0aqB177aHc.dT32UYlxRt.', 'schueler', 'Max', 'Mustermann', 2342, NULL),
 (6, 'erika.musterfrau', 'erika.musterfrau@schule.de', '$2y$10$LVYG9cdULLOBWp29HywZsO1Xh8e5tMQ0aqB177aHc.dT32UYlxRt.', 'schueler', 'Erika', 'Musterfrau', 2441, NULL),

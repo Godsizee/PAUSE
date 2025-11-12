@@ -1,0 +1,51 @@
+/* public/assets/css/1-settings/variables.css */
+:root {
+    --color-primary: #390099;
+    --color-secondary: #9e0059;
+    --color-danger: #ff0054;
+    --color-success: #28a745;
+    --color-warning: #ffbd00;
+
+    --font-display: 'Oswald', sans-serif;
+    --font-body: 'Inter', sans-serif;
+
+    /* Helle Modus-Farben */
+    --color-background: #f4f7f6;
+    --color-surface: #ffffff;
+    --color-surface-alt: #f8f9fa;
+    --color-text: #212529;
+    --color-text-muted: #6c757d;
+    --color-border: #dee2e6;
+
+    /* NEU: Fließende Typografie-Variablen */
+    /* Basis-Schriftgröße (Absatz): 16px -> 18px */
+    --font-size-base: clamp(1rem, 0.95rem + 0.25vw, 1.125rem);
+    /* h4-Größe: 18px -> 20px */
+    --font-size-lg: clamp(1.125rem, 1.05rem + 0.35vw, 1.25rem);
+    /* h3-Größe: 20px -> 24px */
+    --font-size-xl: clamp(1.25rem, 1.1rem + 0.75vw, 1.5rem);
+    /* h2-Größe: 24px -> 32px */
+    --font-size-2xl: clamp(1.5rem, 1.25rem + 1.25vw, 2rem);
+    /* h1 / .main-title Größe: 32px -> 40px */
+    --font-size-3xl: clamp(2rem, 1.75rem + 1.25vw, 2.5rem);
+}
+
+.dark-mode {
+    --color-primary: #a972ff;
+    --color-secondary: #f07167;
+    --color-danger: #f85149;
+    --color-success: #3fb950;
+    --color-warning: #ffca2c;
+
+    --color-background: #0d1117;
+    --color-surface: #161b22;
+    --color-surface-alt: #21262d;
+    --color-text: #e6edf3;
+    --color-text-muted: #8b949e;
+    --color-border: #30363d;
+}
+
+body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+}

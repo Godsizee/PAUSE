@@ -1,29 +1,18 @@
 <?php
-// app/Http/Controllers/DashboardController.php
-
-// MODIFIZIZERT:
-// 1. AppointmentService importiert und im Konstruktor injiziert.
-// 2. AppointmentRepository entfernt (wird jetzt vom Service verwaltet).
-// 3. Methoden getAvailableSlotsApi, bookAppointmentApi, cancelAppointmentApi
-//    refaktorisiert, um den AppointmentService zu nutzen.
-// 4. Geschäftslogik (z.B. Teacher-ID-Lookup, Datumsvalidierung) aus den
-//    Callbacks entfernt und in den Service verschoben.
-
 namespace App\Http\Controllers;
-
 use App\Core\Security;
 use App\Core\Utils;
 use App\Core\Database;
 use App\Repositories\PlanRepository;
 use App\Repositories\UserRepository;
+use App\Repositories\AppointmentRepository;
 use App\Repositories\StudentNoteRepository;
-use App\Services\AppointmentService; 
 use App\Services\AuditLogger;
-use App\Http\Traits\ApiHandlerTrait;
 use Exception;
 use PDO;
 use DateTime;
 use DateTimeZone;
+use App\Http\Traits\ApiHandlerTrait;
 
 class DashboardController
 {
@@ -32,34 +21,24 @@ class DashboardController
     private PDO $pdo;
     private UserRepository $userRepository;
     private PlanRepository $planRepository;
-    // VERALTET: private AppointmentRepository $appointmentRepo;
+    private AppointmentRepository $appointmentRepo;
     private StudentNoteRepository $noteRepo;
-    private AppointmentService $appointmentService; // NEU
 
     public function __construct()
     {
         $this->pdo = Database::getInstance();
         $this->userRepository = new UserRepository($this->pdo);
         $this->planRepository = new PlanRepository($this->pdo);
+        $this->appointmentRepo = new AppointmentRepository($this->pdo);
         $this->noteRepo = new StudentNoteRepository($this->pdo);
-        
-        // NEU: AppointmentService instanziieren (benötigt Repos)
-        $this->appointmentService = new AppointmentService(
-            new \App\Repositories\AppointmentRepository($this->pdo), // Repository hier übergeben
-            $this->userRepository
-        );
-        // VERALTET: $this->appointmentRepo = new AppointmentRepository($this->pdo);
     }
 
-    /**
-     * Zeigt das Haupt-Dashboard an (oder leitet Admin/Planer weiter).
-     * (Unverändert)
-     */
     public function index()
     {
         Security::requireLogin();
         $userId = $_SESSION['user_id'];
         $role = $_SESSION['user_role'] ?? 'Unbekannt';
+
         global $config;
         $config = Database::getConfig();
 
@@ -74,52 +53,45 @@ class DashboardController
 
         $icalSubscriptionUrl = null;
         $user = null;
+
         if (in_array($role, ['schueler', 'lehrer'])) {
-             try {
-                 $user = $this->userRepository->findById($userId);
-                 if ($user) {
-                     $token = $this->userRepository->generateOrGetIcalToken($userId);
-                     if ($token) {
-                         $baseUrl = rtrim($config['base_url'], '/');
-                         $icalPath = 'ical/' . $token;
-                         $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
-                         $host = $_SERVER['HTTP_HOST'];
-                         $icalSubscriptionUrl = $protocol . $host . Utils::url($icalPath);
-                     } else {
-                          error_log("Could not generate or get iCal token for user ID: " . $userId);
-                     }
-                 } else {
-                      error_log("User not found for ID: " . $userId . " in DashboardController");
-                 }
-             } catch (Exception $e) {
-                   error_log("Error fetching iCal token: " . $e->getMessage());
-             }
+            try {
+                $user = $this->userRepository->findById($userId);
+                if ($user) {
+                    $token = $this->userRepository->generateOrGetIcalToken($userId);
+                    if ($token) {
+                        $baseUrl = rtrim($config['base_url'], '/');
+                        $icalPath = 'ical/' . $token;
+                        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off' || $_SERVER['SERVER_PORT'] == 443) ? "https://" : "http://";
+                        $host = $_SERVER['HTTP_HOST'];
+                        $icalSubscriptionUrl = $protocol . $host . Utils::url($icalPath);
+                    } else {
+                        error_log("Could not generate or get iCal token for user ID: " . $userId);
+                    }
+                } else {
+                    error_log("User not found for ID: " . $userId . " in DashboardController");
+                }
+            } catch (Exception $e) {
+                error_log("Error fetching iCal token: " . $e->getMessage());
+            }
         }
 
         $page_title = 'Mein Stundenplan';
         $body_class = 'dashboard-body';
-
         $today = new DateTime('now', new DateTimeZone('Europe/Berlin'));
         $dayOfWeekName = [
             1 => 'Montag', 2 => 'Dienstag', 3 => 'Mittwoch', 4 => 'Donnerstag', 5 => 'Freitag', 6 => 'Samstag', 7 => 'Sonntag'
         ][$today->format('N')] ?? 'Unbekannt';
         $dateFormatted = $today->format('d.m.Y');
-
+        
         require_once dirname(__DIR__, 3) . '/pages/dashboard.php';
     }
 
-
-    /**
-     * API: Laden des kompletten Wochenplans, Vertretungen, Termine & Notizen.
-     * MODIFIZIERT: Holt Termine jetzt über den AppointmentService.
-     */
     public function getWeeklyData()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
-            
+        $this->handleApiRequest(function($data) { // $data kommt von $_GET
             $userId = $_SESSION['user_id'];
             $userRole = $_SESSION['user_role'];
-
             $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
             $calendarWeek = filter_var($data['week'] ?? null, FILTER_VALIDATE_INT);
 
@@ -128,18 +100,17 @@ class DashboardController
                 $year = (int)$today->format('o');
                 $calendarWeek = (int)$today->format('W');
             }
-            
+
             $monday = new DateTime();
             $monday->setISODate($year, $calendarWeek, 1);
             $startDate = $monday->format('Y-m-d');
-            
             $sunday = new DateTime();
             $sunday->setISODate($year, $calendarWeek, 7);
             $endDate = $sunday->format('Y-m-d');
-            
+
             $user = $this->userRepository->findById($userId);
             if (!$user) {
-                throw new Exception("Benutzer nicht gefunden.", 404);
+                throw new Exception("Benutzer nicht gefunden.");
             }
 
             $regularTimetable = [];
@@ -153,46 +124,36 @@ class DashboardController
                 if ($this->planRepository->isWeekPublishedFor($targetGroup, $year, $calendarWeek)) {
                     $regularTimetable = $this->planRepository->getPublishedTimetableForClass($user['class_id'], $year, $calendarWeek);
                     $substitutions = $this->planRepository->getPublishedSubstitutionsForClassWeek($user['class_id'], $year, $calendarWeek);
-                    // MODIFIZIERT: Nutzt Service
-                    $appointments = $this->appointmentService->appointmentRepo->getAppointmentsForStudent($userId, $startDate, $endDate);
+                    $appointments = $this->appointmentRepo->getAppointmentsForStudent($userId, $startDate, $endDate);
                     $notes = $this->noteRepo->getNotesForWeek($userId, $year, $calendarWeek);
                 }
             } elseif ($userRole === 'lehrer' && !empty($user['teacher_id'])) {
-                 $targetGroup = 'teacher';
-                 if ($this->planRepository->isWeekPublishedFor($targetGroup, $year, $calendarWeek)) {
-                      $regularTimetable = $this->planRepository->getPublishedTimetableForTeacher($user['teacher_id'], $year, $calendarWeek);
-                      $substitutions = $this->planRepository->getPublishedSubstitutionsForTeacherWeek($user['teacher_id'], $year, $calendarWeek);
-                      // MODIFIZIERT: Nutzt Service
-                      $appointments = $this->appointmentService->appointmentRepo->getAppointmentsForTeacher($userId, $startDate, $endDate);
-                 }
+                $targetGroup = 'teacher';
+                if ($this->planRepository->isWeekPublishedFor($targetGroup, $year, $calendarWeek)) {
+                    $regularTimetable = $this->planRepository->getPublishedTimetableForTeacher($user['teacher_id'], $year, $calendarWeek);
+                    $substitutions = $this->planRepository->getPublishedSubstitutionsForTeacherWeek($user['teacher_id'], $year, $calendarWeek);
+                    $appointments = $this->appointmentRepo->getAppointmentsForTeacher($userId, $startDate, $endDate);
+                }
             }
 
-            // Rückgabe für Trait
-            return [
-                'json_response' => ['success' => true, 'data' => [
-                    'timetable' => $regularTimetable,
-                    'substitutions' => $substitutions,
-                    'appointments' => $appointments,
-                    'notes' => $notes
-                ]]
-            ];
-
+            echo json_encode(['success' => true, 'data' => [
+                'timetable' => $regularTimetable,
+                'substitutions' => $substitutions,
+                'appointments' => $appointments,
+                'notes' => $notes
+            ]]);
+            
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
-            'checkRole' => ['schueler', 'lehrer']
+            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin'] // requireLogin
         ]);
     }
 
-    /**
-     * API: Speichert eine private Notiz für einen Schüler.
-     * (Unverändert)
-     */
     public function saveNoteApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist JSON-Body
-            
+        $this->handleApiRequest(function($data) { // $data kommt von JSON
             $userId = $_SESSION['user_id'];
-
             $year = filter_var($data['year'] ?? null, FILTER_VALIDATE_INT);
             $calendarWeek = filter_var($data['calendar_week'] ?? null, FILTER_VALIDATE_INT);
             $dayOfWeek = filter_var($data['day_of_week'] ?? null, FILTER_VALIDATE_INT);
@@ -211,126 +172,138 @@ class DashboardController
                 $periodNumber,
                 $content
             );
-
-            if (!$success) {
-                throw new Exception("Notiz konnte nicht gespeichert werden.", 500);
+            
+            if ($success) {
+                echo json_encode(['success' => true, 'message' => 'Notiz gespeichert.']);
+                return [
+                    'log_action' => 'save_student_note',
+                    'log_target_type' => 'student_note',
+                    'log_details' => [
+                        'year' => $year,
+                        'week' => $calendarWeek,
+                        'day' => $dayOfWeek,
+                        'period' => $periodNumber,
+                        'action' => empty(trim($content)) ? 'deleted' : 'saved'
+                    ]
+                ];
+            } else {
+                throw new Exception("Notiz konnte nicht gespeichert werden.");
             }
-
-            $logDetails = [
-                'year' => $year,
-                'week' => $calendarWeek,
-                'day' => $dayOfWeek,
-                'period' => $periodNumber,
-                'action' => empty(trim($content)) ? 'deleted' : 'saved'
-            ];
-
-            return [
-                'json_response' => ['success' => true, 'message' => 'Notiz gespeichert.'],
-                'log_action' => 'save_student_note',
-                'log_target_type' => 'student_note',
-                'log_target_id' => $userId,
-                'log_details' => $logDetails
-            ];
-
         }, [
             'inputType' => 'json',
             'checkRole' => 'schueler'
         ]);
     }
 
-    /**
-     * API: Holt die verfügbaren Slots für einen Lehrer an einem Datum.
-     * MODIFIZIERT: Nutzt AppointmentService. $data ist $_GET.
-     */
-    public function getAvailableSlotsApi()
+    public function getUpcomingSlotsApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
+        $this->handleApiRequest(function($data) { // $data kommt von $_GET
+            $teacherId = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
+            if (!$teacherId) {
+                throw new Exception("Ungültige Lehrer-ID.", 400);
+            }
             
-            $teacherStammdatenId = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
-            $date = filter_var($data['date'] ?? null, FILTER_UNSAFE_RAW);
+            $teacherUser = $this->userRepository->findUserByTeacherId($teacherId);
+            if (!$teacherUser) {
+                throw new Exception("Lehrerprofil (Benutzer) nicht gefunden.", 404);
+            }
+            $teacherUserId = $teacherUser['user_id'];
 
-            // Logik und Validierung ausgelagert:
-            // Service wirft Exceptions bei 400, 404
-            $slots = $this->appointmentService->getAvailableSlots($teacherStammdatenId, $date);
+            $daysInFuture = 14;
+            $slots = $this->appointmentRepo->getUpcomingAvailableSlots($teacherUserId, $daysInFuture);
             
-            // Rückgabe für Trait
-            return [
-                'json_response' => ['success' => true, 'data' => $slots]
-            ];
-
+            echo json_encode(['success' => true, 'data' => $slots]);
+            
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'schueler'
         ]);
     }
-
-    /**
-     * API: Bucht einen Termin.
-     * MODIFIZIERT: Nutzt AppointmentService. $data ist geparstes JSON.
-     */
+    
     public function bookAppointmentApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist JSON-Body
-            
+        $this->handleApiRequest(function($data) { // $data kommt von JSON
             $studentUserId = $_SESSION['user_id'];
+            $teacherId = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
+            $availabilityId = filter_var($data['availability_id'] ?? null, FILTER_VALIDATE_INT);
+            $date = $data['date'] ?? null;
+            $time = $data['time'] ?? null;
+            $duration = filter_var($data['duration'] ?? null, FILTER_VALIDATE_INT);
+            $location = isset($data['location']) ? trim($data['location']) : null;
+            $notes = isset($data['notes']) ? trim($data['notes']) : null;
 
-            // Logik und Validierung ausgelagert:
-            // Service wirft Exceptions bei 400, 404, 409
-            $newId = $this->appointmentService->bookAppointment($studentUserId, $data);
+            if (!$teacherId || !$availabilityId || !$date || !$time || !$duration || $location === null) {
+                throw new Exception("Fehlende Daten für die Buchung (Lehrer, Slot, Datum, Zeit, Dauer oder Ort).", 400);
+            }
             
-            // Log-Details
-            $logDetails = [
-                'teacher_user_id' => $data['teacher_id'], // Speichert die Stammdaten-ID zur Referenz
-                'date' => $data['date'],
-                'time' => $data['time']
-            ];
+            $teacherUser = $this->userRepository->findUserByTeacherId($teacherId);
+            if (!$teacherUser) {
+                throw new Exception("Lehrerprofil (Benutzer) nicht gefunden.", 404);
+            }
+            $teacherUserId = $teacherUser['user_id'];
+            
+            $today = (new DateTime('now', new DateTimeZone('Europe/Berlin')))->format('Y-m-d');
+            if ($date < $today) {
+                throw new Exception("Termine können nicht in der Vergangenheit gebucht werden.", 400);
+            }
 
-            // Rückgabe für Trait
+            $newId = $this->appointmentRepo->bookAppointment(
+                $studentUserId,
+                $teacherUserId,
+                $availabilityId,
+                $date,
+                $time,
+                $duration,
+                $location,
+                $notes
+            );
+            
+            echo json_encode(['success' => true, 'message' => 'Sprechstunde erfolgreich gebucht!']);
+
             return [
-                'json_response' => ['success' => true, 'message' => 'Sprechstunde erfolgreich gebucht!'],
                 'log_action' => 'book_appointment',
                 'log_target_type' => 'appointment',
                 'log_target_id' => $newId,
-                'log_details' => $logDetails
+                'log_details' => [
+                    'teacher_user_id' => $teacherUserId,
+                    'date' => $date,
+                    'time' => $time,
+                    'location' => $location
+                ]
             ];
-
         }, [
             'inputType' => 'json',
             'checkRole' => 'schueler'
         ]);
     }
 
-    /**
-     * API: Storniert einen Termin.
-     * MODIFIZIERT: Nutzt AppointmentService. $data ist geparstes JSON.
-     */
     public function cancelAppointmentApi()
     {
-        $this->handleApiRequest(function($data) { // $data ist JSON-Body
-            
+        $this->handleApiRequest(function($data) { // $data kommt von JSON
             $userId = $_SESSION['user_id'];
             $role = $_SESSION['user_role'];
             $appointmentId = filter_var($data['appointment_id'] ?? null, FILTER_VALIDATE_INT);
 
-            // Logik und Validierung ausgelagert:
-            // Service wirft Exceptions bei 400, 403, 404
-            $this->appointmentService->cancelAppointment($appointmentId, $userId, $role);
+            if (!$appointmentId) {
+                throw new Exception("Keine Termin-ID angegeben.", 400);
+            }
+
+            $success = $this->appointmentRepo->cancelAppointment($appointmentId, $userId, $role);
             
-            // Log-Details
-            $logDetails = ['cancelled_by_role' => $role];
-
-            // Rückgabe für Trait
-            return [
-                'json_response' => ['success' => true, 'message' => 'Termin erfolgreich storniert.'],
-                'log_action' => 'cancel_appointment',
-                'log_target_type' => 'appointment',
-                'log_target_id' => $appointmentId,
-                'log_details' => $logDetails
-            ];
-
+            if ($success) {
+                echo json_encode(['success' => true, 'message' => 'Termin erfolgreich storniert.']);
+                return [
+                    'log_action' => 'cancel_appointment',
+                    'log_target_type' => 'appointment',
+                    'log_target_id' => $appointmentId,
+                    'log_details' => ['cancelled_by_role' => $role]
+                ];
+            }
+            // cancelAppointment wirft bereits eine Exception, wenn es fehlschlägt
         }, [
             'inputType' => 'json',
-            'checkRole' => ['schueler', 'lehrer'] // Beide Rollen dürfen stornieren
+            'checkRole' => ['schueler', 'lehrer'] // requireLogin, aber spezifischer
         ]);
     }
 }

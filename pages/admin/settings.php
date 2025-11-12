@@ -1,19 +1,14 @@
 <?php
-// pages/admin/settings.php
 include_once dirname(__DIR__) . '/partials/header.php';
-// $currentSettings (Array) wird vom SettingsController::index() übergeben
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">Anwendungs-Einstellungen</h1>
     <div class="dashboard-grid">
         <?php include_once __DIR__ . '/partials/_sidebar.php'; ?>
         <main class="dashboard-content" id="settings-management">
             <div class="dashboard-section active">
-                
                 <form id="settings-form" data-mode="update" method="POST" enctype="multipart/form-data">
                     <?php \App\Core\Security::csrfInput(); // CSRF-Token ?>
-
                     <div class="form-container settings-section">
                         <h3>Allgemein</h3>
                         <div class="setting-row">
@@ -30,10 +25,8 @@ include_once dirname(__DIR__) . '/partials/header.php';
                             </div>
                         </div>
                     </div>
-
                     <div class="form-container settings-section" style="margin-top: 25px;">
                         <h3>Branding &amp; Design</h3>
-                        
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="site_logo">Logo (Header)</label>
@@ -53,7 +46,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </div>
                             </div>
                         </div>
-                        
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="site_favicon">Favicon</label>
@@ -73,7 +65,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </div>
                             </div>
                         </div>
-
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="default_theme">Standard-Theme</label>
@@ -90,9 +81,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </select>
                             </div>
                         </div>
-
                     </div>
-
                     <div class="form-container settings-section" style="margin-top: 25px;">
                         <h3>System &amp; Sicherheit</h3>
                         <div class="setting-row">
@@ -114,7 +103,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </span>
                             </div>
                         </div>
-
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="maintenance_message">Wartungsmeldung</label>
@@ -128,7 +116,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                           placeholder="Die Anwendung wird gerade gewartet..."><?php echo htmlspecialchars($currentSettings['maintenance_message'] ?? ''); ?></textarea>
                             </div>
                         </div>
-                        
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="maintenance_whitelist_ips">IP-Whitelist (Wartungsmodus)</label>
@@ -142,7 +129,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                           placeholder="127.0.0.1, ::1, 192.168.1.100"><?php echo htmlspecialchars($currentSettings['maintenance_whitelist_ips'] ?? ''); ?></textarea>
                             </div>
                         </div>
-
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label>Login-Sperre</label>
@@ -172,7 +158,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                             </div>
                         </div>
                     </div>
-
                     <div class="form-container settings-section" style="margin-top: 25px;">
                         <h3>Planer &amp; Module</h3>
                         <div class="setting-row">
@@ -201,7 +186,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </div>
                             </div>
                         </div>
-                        
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="ical_enabled">iCal Kalender-Feeds</label>
@@ -221,7 +205,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </span>
                             </div>
                         </div>
-                        
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="ical_weeks_future">iCal-Zeitraum (Zukunft)</label>
@@ -239,7 +222,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </div>
                             </div>
                         </div>
-
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="pdf_footer_text">PDF Export Footer-Text</label>
@@ -254,7 +236,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 <small class="form-hint" style="margin-top: 8px;">Hinweis: Nur Standard-Satzzeichen (ASCII/ISO-8859-1) verwenden. Emojis oder spezielle UTF-8-Zeichen werden im PDF nicht korrekt dargestellt.</small>
                             </div>
                         </div>
-                        
                         <div class="setting-row">
                             <div class="setting-info">
                                 <label for="community_board_enabled">Schwarzes Brett (Community)</label>
@@ -274,9 +255,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 </span>
                             </div>
                         </div>
-                        
                     </div>
-
                     <div class="form-actions" style="margin-top: 30px; border-top: 1px solid var(--color-border); padding-top: 25px;">
                         <button type="submit" class="btn btn-primary" id="save-settings-btn">
                             Einstellungen speichern
@@ -284,10 +263,8 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         <span id="save-settings-spinner" class="loading-spinner small" style="display: none; margin-left: 15px;"></span>
                     </div>
                 </form>
-                
                 <div class="form-container settings-section" style="margin-top: 30px;">
                     <h3>System-Wartung</h3>
-                    
                     <div class="setting-row">
                         <div class="setting-info">
                             <label>Anwendungs-Cache</label>
@@ -295,7 +272,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </div>
                         <div class="setting-control cache-control-section" style="flex-direction: column; align-items: flex-start;">
                             <input type="hidden" id="cache_csrf_token" value="<?php echo htmlspecialchars(\App\Core\Security::getCsrfToken()); ?>">
-                            
                             <button type="button" id="clear-cache-btn" class="btn btn-secondary" style="width: auto; margin-bottom: 0;">
                                 Cache jetzt leeren
                             </button>
@@ -307,7 +283,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

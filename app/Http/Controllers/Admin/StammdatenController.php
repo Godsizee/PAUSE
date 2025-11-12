@@ -1,29 +1,16 @@
 <?php
-// app/Http/Controllers/Admin/StammdatenController.php
-
-// MODIFIZIERT:
-// 1. ApiHandlerTrait importiert und verwendet.
-// 2. Die lokale Implementierung von handleApiRequest() wurde entfernt.
-// 3. Alle API-Methoden (get/create/update/delete für alle Typen) wurden
-//    vollständig refaktorisiert, um die Trait-Methode zu nutzen.
-// 4. 'inputType' => 'get' für Lesezugriffe, 'inputType' => 'form' für Schreibzugriffe.
-// 5. Alle Callbacks geben jetzt das vom Trait erwartete Array-Format zurück
-//    (inkl. 'json_response', 'log_action', 'log_target_id' etc.).
-
 namespace App\Http\Controllers\Admin;
-
 use App\Core\Security;
 use App\Core\Database;
 use App\Repositories\StammdatenRepository;
 use Exception;
 use PDO;
 use App\Services\AuditLogger;
-use App\Http\Traits\ApiHandlerTrait; // NEU: Trait importieren
+use App\Http\Traits\ApiHandlerTrait; // NEU
 
 class StammdatenController
 {
-    // NEU: Trait für API-Behandlung einbinden
-    use ApiHandlerTrait;
+    use ApiHandlerTrait; // NEU
 
     private PDO $pdo;
     private StammdatenRepository $repository;
@@ -34,62 +21,42 @@ class StammdatenController
         $this->repository = new StammdatenRepository($this->pdo);
     }
 
-    /**
-     * Zeigt die Hauptseite für die Stammdatenverwaltung an.
-     * (Unverändert)
-     */
     public function index()
     {
         Security::requireRole('admin');
         global $config;
         $config = Database::getConfig();
-
         $page_title = 'Stammdatenverwaltung';
         $body_class = 'admin-dashboard-body';
-         
         Security::getCsrfToken();
-
         include_once dirname(__DIR__, 4) . '/pages/admin/stammdaten.php';
     }
 
-    // --- API METHODS FOR SUBJECTS ---
+    // ENTFERNT: Lokale handleApiRequest Methode
 
-    /**
-     * API: Holt alle Fächer und gibt sie als JSON zurück.
-     * MODIFIZIERT: Nutzt ApiHandlerTrait.
-     */
     public function getSubjects()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
+        $this->handleApiRequest(function($data) {
             $subjects = $this->repository->getSubjects();
-            
-            return [
-                'json_response' => ['success' => true, 'data' => $subjects]
-            ];
-
+            echo json_encode(['success' => true, 'data' => $subjects], JSON_THROW_ON_ERROR);
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'admin'
         ]);
     }
 
-    /**
-     * API: Erstellt ein neues Fach.
-     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_POST.
-     */
     public function createSubject()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
-            
+        $this->handleApiRequest(function($data) { // $data kommt von $_POST
             $name = trim($data['subject_name'] ?? '');
             $shortcut = trim($data['subject_shortcut'] ?? '');
             if (empty($name) || empty($shortcut)) {
-                throw new Exception("Fachname und Kürzel dürfen nicht leer sein.", 400);
+                throw new Exception("Fachname und Kürzel dürfen nicht leer sein.");
             }
             $newId = $this->repository->createSubject($name, $shortcut);
             $newSubject = ['subject_id' => $newId, 'subject_name' => $name, 'subject_shortcut' => $shortcut];
 
-            // Rückgabe für Trait
             return [
                 'json_response' => ['success' => true, 'message' => 'Fach erfolgreich erstellt.', 'data' => $newSubject],
                 'log_action' => 'create_subject',
@@ -97,32 +64,24 @@ class StammdatenController
                 'log_target_id' => $newId,
                 'log_details' => ['name' => $name, 'shortcut' => $shortcut]
             ];
-
         }, [
-            'inputType' => 'form', // JS sendet FormData
+            'inputType' => 'form',
             'checkRole' => 'admin'
         ]);
     }
 
-    /**
-     * API: Aktualisiert ein bestehendes Fach.
-     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_POST.
-     */
     public function updateSubject()
     {
-         $this->handleApiRequest(function($data) { // $data ist $_POST
-            
+        $this->handleApiRequest(function($data) {
             $id = filter_var($data['subject_id'] ?? null, FILTER_VALIDATE_INT);
             $name = trim($data['subject_name'] ?? '');
             $shortcut = trim($data['subject_shortcut'] ?? '');
-
             if (!$id || empty($name) || empty($shortcut)) {
-                throw new Exception("Ungültige Daten für das Update.", 400);
+                throw new Exception("Ungültige Daten für das Update.");
             }
             $this->repository->updateSubject($id, $name, $shortcut);
             $updatedSubject = ['subject_id' => $id, 'subject_name' => $name, 'subject_shortcut' => $shortcut];
 
-            // Rückgabe für Trait
             return [
                 'json_response' => ['success' => true, 'message' => 'Fach erfolgreich aktualisiert.', 'data' => $updatedSubject],
                 'log_action' => 'update_subject',
@@ -130,55 +89,38 @@ class StammdatenController
                 'log_target_id' => $id,
                 'log_details' => ['name' => $name, 'shortcut' => $shortcut]
             ];
-
         }, [
             'inputType' => 'form',
             'checkRole' => 'admin'
         ]);
     }
 
-    /**
-     * API: Löscht ein Fach.
-     * MODIFIZIERT: Nutzt ApiHandlerTrait. $data ist $_POST.
-     */
     public function deleteSubject()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
-            
+        $this->handleApiRequest(function($data) {
             $id = filter_var($data['subject_id'] ?? null, FILTER_VALIDATE_INT);
             if (!$id) {
-                throw new Exception("Ungültige ID.", 400);
+                throw new Exception("Ungültige ID.");
             }
-
-            // Hole Daten für Log VOR dem Löschen (optional, aber gut für Details)
-            // $subject = $this->repository->getSubjectById($id); // Annahme: getSubjectById existiert
-            // $details = ['name' => $subject['subject_name'] ?? 'N/A'];
-            
             $this->repository->deleteSubject($id);
 
-            // Rückgabe für Trait
             return [
                 'json_response' => ['success' => true, 'message' => 'Fach erfolgreich gelöscht.'],
                 'log_action' => 'delete_subject',
                 'log_target_type' => 'subject',
                 'log_target_id' => $id,
-                'log_details' => ['id' => $id] // $details
+                'log_details' => ['id' => $id]
             ];
-
         }, [
             'inputType' => 'form',
             'checkRole' => 'admin'
         ]);
     }
 
-    // --- API METHODS FOR ROOMS ---
-
     public function getRooms() {
         $this->handleApiRequest(function($data) {
-            $rooms = $this->repository->getRooms();
-            return [
-                'json_response' => ['success' => true, 'data' => $rooms]
-            ];
+            echo json_encode(['success' => true, 'data' => $this->repository->getRooms()], JSON_THROW_ON_ERROR);
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'admin'
@@ -188,8 +130,7 @@ class StammdatenController
     public function createRoom() {
         $this->handleApiRequest(function($data) {
             $name = trim($data['room_name'] ?? '');
-            if (empty($name)) throw new Exception("Raumname darf nicht leer sein.", 400);
-            
+            if (empty($name)) throw new Exception("Raumname darf nicht leer sein.");
             $newId = $this->repository->createRoom($name);
             $newRoom = ['room_id' => $newId, 'room_name' => $name];
 
@@ -210,8 +151,7 @@ class StammdatenController
         $this->handleApiRequest(function($data) {
             $id = filter_var($data['room_id'] ?? null, FILTER_VALIDATE_INT);
             $name = trim($data['room_name'] ?? '');
-            if (!$id || empty($name)) throw new Exception("Ungültige Daten.", 400);
-            
+            if (!$id || empty($name)) throw new Exception("Ungültige Daten.");
             $this->repository->updateRoom($id, $name);
             $updatedRoom = ['room_id' => $id, 'room_name' => $name];
 
@@ -231,8 +171,7 @@ class StammdatenController
     public function deleteRoom() {
         $this->handleApiRequest(function($data) {
             $id = filter_var($data['room_id'] ?? null, FILTER_VALIDATE_INT);
-            if (!$id) throw new Exception("Ungültige ID.", 400);
-            
+            if (!$id) throw new Exception("Ungültige ID.");
             $this->repository->deleteRoom($id);
 
             return [
@@ -247,14 +186,10 @@ class StammdatenController
         ]);
     }
 
-    // --- API METHODS FOR TEACHERS ---
-
     public function getTeachers() {
         $this->handleApiRequest(function($data) {
-            $teachers = $this->repository->getTeachers();
-            return [
-                'json_response' => ['success' => true, 'data' => $teachers]
-            ];
+            echo json_encode(['success' => true, 'data' => $this->repository->getTeachers()], JSON_THROW_ON_ERROR);
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'admin'
@@ -262,18 +197,16 @@ class StammdatenController
     }
 
     public function createTeacher() {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
+        $this->handleApiRequest(function($data) {
             $teacherData = [
                 'shortcut' => trim($data['teacher_shortcut'] ?? ''),
                 'first_name' => trim($data['first_name'] ?? ''),
                 'last_name' => trim($data['last_name'] ?? ''),
                 'email' => empty(trim($data['email'] ?? '')) ? null : trim($data['email'])
             ];
-
             if (empty($teacherData['shortcut']) || empty($teacherData['first_name']) || empty($teacherData['last_name'])) {
-                throw new Exception("Kürzel, Vorname und Nachname sind Pflichtfelder.", 400);
+                throw new Exception("Kürzel, Vorname und Nachname sind Pflichtfelder.");
             }
-            
             $newId = $this->repository->createTeacher($teacherData);
             $newTeacher = array_merge(['teacher_id' => $newId], $teacherData);
 
@@ -291,7 +224,7 @@ class StammdatenController
     }
 
     public function updateTeacher() {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
+        $this->handleApiRequest(function($data) {
             $id = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
             $teacherData = [
                 'shortcut' => trim($data['teacher_shortcut'] ?? ''),
@@ -299,11 +232,9 @@ class StammdatenController
                 'last_name' => trim($data['last_name'] ?? ''),
                 'email' => empty(trim($data['email'] ?? '')) ? null : trim($data['email'])
             ];
-
             if (!$id || empty($teacherData['shortcut']) || empty($teacherData['first_name']) || empty($teacherData['last_name'])) {
-                throw new Exception("Ungültige Daten.", 400);
+                throw new Exception("Ungültige Daten.");
             }
-            
             $this->repository->updateTeacher($id, $teacherData);
             $updatedTeacher = array_merge(['teacher_id' => $id], $teacherData);
 
@@ -321,10 +252,9 @@ class StammdatenController
     }
 
     public function deleteTeacher() {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
+        $this->handleApiRequest(function($data) {
             $id = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
-            if (!$id) throw new Exception("Ungültige ID.", 400);
-            
+            if (!$id) throw new Exception("Ungültige ID.");
             $this->repository->deleteTeacher($id);
 
             return [
@@ -339,14 +269,10 @@ class StammdatenController
         ]);
     }
 
-    // --- API METHODS FOR CLASSES ---
-
     public function getClasses() {
         $this->handleApiRequest(function($data) {
-            $classes = $this->repository->getClasses();
-            return [
-                'json_response' => ['success' => true, 'data' => $classes]
-            ];
+            echo json_encode(['success' => true, 'data' => $this->repository->getClasses()], JSON_THROW_ON_ERROR);
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
             'checkRole' => 'admin'
@@ -354,31 +280,23 @@ class StammdatenController
     }
 
     public function createClass() {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
-            
-            // KORREKTUR: JS sendet 'class_id_input'
-            $id = filter_var($data['class_id_input'] ?? null, FILTER_VALIDATE_INT);
+        $this->handleApiRequest(function($data) {
+            $id = filter_var($data['class_id_input'] ?? null, FILTER_VALIDATE_INT); // Vom Formular
             $name = trim($data['class_name'] ?? '');
             $teacherId = filter_var($data['class_teacher_id'] ?? null, FILTER_VALIDATE_INT);
             $teacherId = ($teacherId === 0 || $teacherId === false) ? null : $teacherId;
-
             if (empty($name) || !$id || $id <= 0) {
-                 throw new Exception("Klassen-ID (positiv) und Klassenname dürfen nicht leer sein.", 400);
+                throw new Exception("Klassen-ID (positiv) und Klassenname dürfen nicht leer sein.");
             }
-
-            // Repository wirft Exception bei Duplikat
             $this->repository->createClass($id, $name, $teacherId);
             $newClass = ['class_id' => $id, 'class_name' => $name, 'class_teacher_id' => $teacherId];
-            
-            // Log-Details
-            $logDetails = ['name' => $name, 'teacher_id' => $teacherId];
 
             return [
                 'json_response' => ['success' => true, 'message' => 'Klasse erfolgreich erstellt.', 'data' => $newClass],
                 'log_action' => 'create_class',
                 'log_target_type' => 'class',
                 'log_target_id' => $id,
-                'log_details' => $logDetails
+                'log_details' => ['name' => $name, 'teacher_id' => $teacherId]
             ];
         }, [
             'inputType' => 'form',
@@ -387,30 +305,23 @@ class StammdatenController
     }
 
     public function updateClass() {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
-            
-            // KORREKTUR: JS sendet 'class_id_hidden'
-            $id = filter_var($data['class_id_hidden'] ?? null, FILTER_VALIDATE_INT);
+        $this->handleApiRequest(function($data) {
+            $id = filter_var($data['class_id_hidden'] ?? null, FILTER_VALIDATE_INT); // Vom Formular
             $name = trim($data['class_name'] ?? '');
             $teacherId = filter_var($data['class_teacher_id'] ?? null, FILTER_VALIDATE_INT);
             $teacherId = ($teacherId === 0 || $teacherId === false) ? null : $teacherId;
-
             if (!$id || empty($name)) {
-                 throw new Exception("Ungültige Daten für Update (ID und Name benötigt).", 400);
+                throw new Exception("Ungültige Daten für Update (ID und Name benötigt).");
             }
-            
             $this->repository->updateClass($id, $name, $teacherId);
             $updatedClass = ['class_id' => $id, 'class_name' => $name, 'class_teacher_id' => $teacherId];
-
-            // Log-Details
-            $logDetails = ['name' => $name, 'teacher_id' => $teacherId];
 
             return [
                 'json_response' => ['success' => true, 'message' => 'Klasse erfolgreich aktualisiert.', 'data' => $updatedClass],
                 'log_action' => 'update_class',
                 'log_target_type' => 'class',
                 'log_target_id' => $id,
-                'log_details' => $logDetails
+                'log_details' => ['name' => $name, 'teacher_id' => $teacherId]
             ];
         }, [
             'inputType' => 'form',
@@ -419,11 +330,9 @@ class StammdatenController
     }
 
     public function deleteClass() {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
-            
+        $this->handleApiRequest(function($data) {
             $id = filter_var($data['class_id'] ?? null, FILTER_VALIDATE_INT);
-            if (!$id) throw new Exception("Ungültige ID.", 400);
-            
+            if (!$id) throw new Exception("Ungültige ID.");
             $this->repository->deleteClass($id);
 
             return [

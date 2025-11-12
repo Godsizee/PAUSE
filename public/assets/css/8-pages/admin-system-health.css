@@ -1,0 +1,64 @@
+.health-widget {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: 12px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+}
+.dark-mode .health-widget {
+    background-color: var(--color-surface-alt);
+}
+.health-widget h3 {
+    font-size: 1.3rem;
+    margin: 0;
+    padding: 20px 25px;
+    border-bottom: 1px solid var(--color-border);
+}
+.health-list {
+    list-style: none;
+    padding: 25px;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 18px;
+}
+.health-list li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1rem;
+    padding-bottom: 18px;
+    border-bottom: 1px dashed var(--color-border);
+}
+.health-list li:last-child {
+    border-bottom: none;
+    padding-bottom: 0;
+}
+.health-label {
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+.health-value {
+    font-weight: 600;
+    font-family: var(--font-display);
+    font-size: 0.95rem;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+.health-value.status-ok {
+    color: var(--color-success);
+}
+.health-value.status-error {
+    color: var(--color-danger);
+}
+.health-value.status-warn {
+    color: var(--color-warning);
+}
+.health-widget.widget-permissions .health-label {
+    font-family: monospace;
+    font-size: 0.9rem;
+    color: var(--color-text);
+}
+.dark-mode .health-widget.widget-permissions .health-label {
+     color: var(--color-text-muted);
+}

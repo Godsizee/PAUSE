@@ -1,16 +1,8 @@
-// public/assets/js/dashboard.js
 import { apiFetch } from './api-client.js';
 import { showToast, showConfirm } from './notifications.js';
 import { escapeHtml } from './planer-utils.js';
-// NEU: Importiere die Lazy-Loading-Funktion für "Meine Beiträge"
 import { initializeMyCommunityPosts } from './dashboard-my-posts.js';
 
-
-/**
- * Helper function to get week and year for a date according to ISO 8601.
- * @param {Date} date - The date object.
- * @returns {{week: number, year: number}} - Calendar week and year.
- */
 function getWeekAndYear(date) {
     const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
     d.setUTCDate(d.getUTCDate() + 4 - (d.getUTCDay() || 7));
@@ -19,12 +11,6 @@ function getWeekAndYear(date) {
     return { week: weekNo, year: d.getUTCFullYear() };
 }
 
-/**
- * Gets the date of the Monday of a given calendar week and year.
- * @param {number} week - The calendar week.
- * @param {number} year - The year.
- * @returns {Date} The Date object for Monday (local time).
-*/
 function getDateOfISOWeek(week, year) {
     const simple = new Date(Date.UTC(year, 0, 1 + (week - 1) * 7));
     const dow = simple.getUTCDay();
@@ -33,11 +19,6 @@ function getDateOfISOWeek(week, year) {
     return new Date(ISOweekStart.getUTCFullYear(), ISOweekStart.getUTCMonth(), ISOweekStart.getUTCDate());
 }
 
-/**
- * Formats a time slot index (1-based) into HH:MM (start time).
- * @param {number} period - The period number (1 to 10).
- * @returns {string} Formatted time string like "08:00".
- */
 function formatTimeSlot(period) {
     const times = [
         "08:00", "08:55", "09:40", "10:35", "11:20",
@@ -46,11 +27,6 @@ function formatTimeSlot(period) {
     return times[period - 1] || '??:??';
 }
 
-/**
- * Formats a YYYY-MM-DD Datum in ein lesbares deutsches Format.
- * @param {string} dateString - YYYY-MM-DD
- * @returns {string} TT.MM.YYYY
- */
 function formatGermanDate(dateString) {
     if (!dateString) return '';
     try {
@@ -63,11 +39,7 @@ function formatGermanDate(dateString) {
         return dateString;
     }
 }
-/**
- * Formatiert HH:MM:SS zu HH:MM.
- * @param {string} timeString - HH:MM:SS
- * @returns {string} HH:MM
- */
+
 function formatShortTime(timeString) {
     if (!timeString) return '';
     const parts = timeString.split(':');
@@ -77,31 +49,26 @@ function formatShortTime(timeString) {
     return timeString;
 }
 
-// NEU: Globaler State für Dashboard-Daten (Stammdaten, Pläne)
 const dashboardState = {
     stammdaten: null,
     currentTimetable: [],
     currentSubstitutions: [],
-    studentNotes: {}, // NEU: Objekt für Notizen
+    studentNotes: {}, 
     currentPublishStatus: { student: false, teacher: false }
-    // currentViewMode, selectedClassId, etc. werden in planer-state.js verwaltet,
-    // aber wir brauchen sie hier nicht, da das Dashboard seine eigene Logik hat.
 };
 
-// --- Module-Level Constants (MOVED HERE) ---
 const days = ["Montag", "Dienstag", "Mittwoch", "Donnerstag", "Freitag"];
 const timeSlotsDisplay = [
      "08:00 - 08:45", "08:55 - 09:40", "09:40 - 10:25", "10:35 - 11:20",
      "11:20 - 12:05", "13:05 - 13:50", "13:50 - 14:35", "14:45 - 15:30",
      "15:30 - 16:15", "16:25 - 17:10"
 ];
-// --- Module-Level DOM Elements & Constants (MOVED HERE) ---
+
 const userRole = window.APP_CONFIG.userRole;
 const today = new Date();
 const todayDateString = today.toISOString().split('T')[0];
-const todayDayOfWeek = (today.getDay() === 0) ? 7 : today.getDay(); // 1=Mo
+const todayDayOfWeek = (today.getDay() === 0) ? 7 : today.getDay(); 
 
-// --- DOM Elements (defined at module scope) ---
 const yearSelector = document.getElementById('year-selector');
 const weekSelector = document.getElementById('week-selector');
 const planHeaderInfo = document.getElementById('plan-header-info');
@@ -112,6 +79,7 @@ const icalUrlInput = document.getElementById('ical-url');
 const copyIcalUrlButton = document.getElementById('copy-ical-url');
 const pdfButton = document.getElementById('export-pdf-btn');
 const printableSection = document.getElementById('weekly-timetable-section-printable');
+
 const detailModal = document.getElementById('plan-detail-modal');
 const detailCloseBtn = document.getElementById('plan-detail-close-btn');
 const noteRow = document.getElementById('detail-notes-row');
@@ -119,9 +87,6 @@ const noteInput = document.getElementById('detail-notes-input');
 const noteSaveBtn = document.getElementById('plan-detail-save-note-btn');
 const noteSpinner = document.getElementById('note-save-spinner');
 
-/**
- * Loads and renders announcements into the sidebar, now using content_html.
- */
 const loadAnnouncements = async () => {
     if (!announcementsList) return;
     announcementsList.innerHTML = '<div class="loading-spinner"></div>';
@@ -140,13 +105,10 @@ const loadAnnouncements = async () => {
                 if (!item.is_global && item.target_class_name) {
                     targetInfo = ` (Klasse: ${escapeHtml(item.target_class_name)})`;
                 }
-
                 const attachmentLink = item.file_url
                     ? `<p class="announcement-attachment"><a href="${escapeHtml(item.file_url)}" target="_blank" download>📎 Anhang herunterladen</a></p>`
                     : '';
-
                 const contentHtml = item.content_html || '<p><em>Kein Inhalt.</em></p>';
-
                 return `
                 <div class="announcement-item">
                     <div class="announcement-header">
@@ -169,9 +131,6 @@ const loadAnnouncements = async () => {
     }
 };
 
-/**
- * Populates year and week selector dropdowns.
- */
 const populateSelectors = () => {
     if (!yearSelector || !weekSelector) return; 
     const currentYear = new Date().getFullYear();
@@ -180,66 +139,46 @@ const populateSelectors = () => {
         yearOptions += `<option value="${i}">${i}</option>`;
     }
     yearSelector.innerHTML = yearOptions;
-
     let weekOptions = '';
     for (let i = 1; i <= 53; i++) {
         weekOptions += `<option value="${i}">KW ${i}</option>`;
     }
     weekSelector.innerHTML = weekOptions;
-
     const { week, year } = getWeekAndYear(today);
     yearSelector.value = year;
     weekSelector.value = week;
 };
 
-/**
- * Loads all data for the selected week and renders both weekly and daily views.
- */
 const loadAndRenderWeeklyData = async () => {
     if (!yearSelector || !weekSelector) return; 
-    
     const year = yearSelector.value;
     const week = weekSelector.value;
-
     timetableContainer.innerHTML = '<div class="loading-spinner"></div>';
     if (todayScheduleContainer) {
         todayScheduleContainer.innerHTML = '<div class="loading-spinner small"></div>';
     }
-
     const monday = getDateOfISOWeek(Number(week), Number(year));
     const friday = new Date(monday.getTime() + 4 * 24 * 60 * 60 * 1000);
     planHeaderInfo.textContent = `Stundenplan für die ${week}. Kalenderwoche (${monday.toLocaleDateString('de-DE')} - ${friday.toLocaleDateString('de-DE')})`;
-
     let timetable = [];
     let substitutions = [];
     let academicEvents = [];
     let appointments = [];
-    let studentNotes = {}; // NEU: Notizen hier empfangen
-
+    let studentNotes = {}; 
     try {
-        // --- Schritt 1: Plandaten & Termine (Kritisch) ---
         const planUrl = `${window.APP_CONFIG.baseUrl}/api/dashboard/weekly-data?year=${year}&week=${week}`;
         const planResponse = await apiFetch(planUrl);
-        
         if (!planResponse.success || !planResponse.data) {
             throw new Error(planResponse.message || "Plandaten konnten nicht geladen werden.");
         }
-
         timetable = planResponse.data.timetable || [];
         substitutions = planResponse.data.substitutions || [];
         appointments = planResponse.data.appointments || [];
-        studentNotes = (userRole === 'schueler') ? (planResponse.data.studentNotes || {}) : {}; // NEU
-
-        
-        // NEU: Daten im globalen State speichern
+        studentNotes = (userRole === 'schueler') ? (planResponse.data.studentNotes || {}) : {}; 
         dashboardState.currentTimetable = timetable;
         dashboardState.currentSubstitutions = substitutions;
-        dashboardState.studentNotes = studentNotes; // NEU
-
-        // --- Schritt 2: Wochenplan sofort rendern ---
-        renderWeeklyTimetable(timetable, substitutions, studentNotes); // NEU: Notizen übergeben
-
-        // --- Schritt 3: Events (Zusätzlich, nur für Schüler) ---
+        dashboardState.studentNotes = studentNotes; 
+        renderWeeklyTimetable(timetable, substitutions, studentNotes); 
         if (userRole === 'schueler') {
             try {
                 const eventsUrl = `${window.APP_CONFIG.baseUrl}/api/student/events?year=${year}&week=${week}`;
@@ -253,10 +192,7 @@ const loadAndRenderWeeklyData = async () => {
                 console.error("Fehler beim Laden der Events:", eventError);
             }
         }
-
-        // --- Schritt 4: "Mein Tag" rendern (mit Plandaten, Events UND Terminen) ---
-        renderTodaySchedule(timetable, substitutions, academicEvents, appointments, studentNotes); // NEU: Notizen übergeben
-
+        renderTodaySchedule(timetable, substitutions, academicEvents, appointments, studentNotes); 
     } catch (error) { 
         console.error("Fehler beim Laden der Wochendaten (kritisch):", error);
         timetableContainer.innerHTML = `<p class="message error">${error.message || 'Der Wochenplan konnte nicht geladen werden.'}</p>`;
@@ -266,73 +202,56 @@ const loadAndRenderWeeklyData = async () => {
     }
 };
 
-/**
- * Extracts and renders today's schedule into the "Mein Tag" container.
- */
 const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvents, appointments, studentNotes) => {
     if (!todayScheduleContainer) return;
-
     const currentDayNum = todayDayOfWeek;
     if (currentDayNum < 1 || currentDayNum > 5) {
         todayScheduleContainer.innerHTML = '<p class="message info" style="padding: 10px; margin: 0;">Heute ist kein Schultag. Genieße die freie Zeit! 🎉</p>';
         return;
     }
-
-    // A. Ermittle die aktuelle Zeit in HHMM (z.B. 1030 für 10:30)
     const PERIOD_END_TIMES = [
-        845, 940, 1025, 1120, 1205, // Vormittag
-        1350, 1435, 1530, 1615, 1710  // Nachmittag (basierend auf Standard-Definition)
+        845, 940, 1025, 1120, 1205, 
+        1350, 1435, 1530, 1615, 1710  
     ];
     const now = new Date();
-    // Hole die Zeit in der korrekten Zeitzone (Europe/Berlin)
     const timeFormatter = new Intl.DateTimeFormat('de-DE', {
         hour: '2-digit',
         minute: '2-digit',
         timeZone: 'Europe/Berlin', 
         hour12: false
     });
-    const parts = timeFormatter.format(now).split(':'); // z.B. ["11", "21"]
-    const currentHHMM = parseInt(parts[0], 10) * 100 + parseInt(parts[1], 10); // z.B. 1121
-
-
+    const parts = timeFormatter.format(now).split(':'); 
+    const currentHHMM = parseInt(parts[0], 10) * 100 + parseInt(parts[1], 10); 
     const todaysEntries = weeklyTimetable.filter(entry => entry.day_of_week == currentDayNum);
     const todaysSubstitutions = weeklySubstitutions.filter(sub => sub.date === todayDateString);
     const todaysEvents = (academicEvents || []).filter(event => event.due_date === todayDateString);
     const todaysAppointments = (appointments || []).filter(app => app.appointment_date === todayDateString);
-
     let combinedSchedule = [];
-
-    // 1. Reguläre Einträge und Vertretungen
     for (let period = 1; period <= timeSlotsDisplay.length; period++) {
-        const periodEndTime = PERIOD_END_TIMES[period - 1]; // z.B. 845
-
-        // *** NEUE FILTERLOGIK: Überspringe, wenn die Stunde vorbei ist ***
+        const periodEndTime = PERIOD_END_TIMES[period - 1]; 
         if (currentHHMM > periodEndTime) {
             continue; 
         }
-        // *** ENDE NEUE LOGIK ***
-
         const substitution = todaysSubstitutions.find(sub => sub.period_number === period);
         const regularEntry = todaysEntries.find(entry => entry.period_number === period);
-        const noteKey = `${todayDayOfWeek}-${period}`; // NEU
-        const note = studentNotes[noteKey] || ''; // NEU
-
+        const noteKey = `${todayDayOfWeek}-${period}`; 
+        const note = studentNotes[noteKey] || ''; 
         if (substitution) {
             combinedSchedule.push({
                 sortKey: period * 10,
                 period: period,
                 time: formatTimeSlot(period),
                 type: substitution.substitution_type,
-                id: substitution.substitution_id, // ID für ICS-Link (Sonderevent)
-                class_id: substitution.class_id, // HINZUGEFÜGT
+                id: substitution.substitution_id, 
+                class_id: substitution.class_id, 
                 subject: substitution.new_subject_shortcut || regularEntry?.subject_shortcut || (substitution.substitution_type === 'Sonderevent' ? 'EVENT' : '---'),
                 mainText: substitution.substitution_type === 'Vertretung'
                     ? (userRole === 'teacher' ? (substitution.class_name || regularEntry?.class_name) : substitution.new_teacher_shortcut)
                     : (substitution.substitution_type === 'Entfall' ? '' : (regularEntry ? (userRole === 'schueler' ? regularEntry.teacher_shortcut : regularEntry.class_name) : '')),
                 room: substitution.new_room_name || regularEntry?.room_name || '',
                 comment: substitution.comment || '',
-                note: note, // NEU
-                icsType: (substitution.substitution_type === 'Sonderevent') ? 'sub' : null // ICS-Typ für Sonderevent
+                note: note, 
+                icsType: (substitution.substitution_type === 'Sonderevent') ? 'sub' : null 
             });
         } else if (regularEntry) {
             combinedSchedule.push({
@@ -341,99 +260,75 @@ const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvent
                 time: formatTimeSlot(period),
                 type: 'regular',
                 id: regularEntry.entry_id,
-                class_id: regularEntry.class_id, // HINZUGEFÜGT
+                class_id: regularEntry.class_id, 
                 subject: regularEntry.subject_shortcut || '---',
                 mainText: userRole === 'schueler' ? regularEntry.teacher_shortcut : regularEntry.class_name,
                 room: regularEntry.room_name || '---',
                 comment: regularEntry.comment || '',
-                note: note, // NEU
+                note: note, 
                 icsType: null
             });
         }
     }
-    
-    // 2. Klausuren/Aufgaben (Ganztägig - werden immer angezeigt)
     todaysEvents.forEach(event => {
         combinedSchedule.push({
-            sortKey: 1, // Ganztägig, an den Anfang
+            sortKey: 1, 
             time: 'Ganztägig',
             type: event.event_type,
             subject: event.title,
             mainText: event.subject_shortcut || (userRole === 'schueler' ? `${event.teacher_first_name} ${event.teacher_last_name}` : ''),
             room: '',
             comment: event.description || '',
-            note: '', // NEU (Keine Notizen für Events)
-            id: event.event_id, // ID für ICS-Link
-            icsType: 'acad' // Typ für ICS-Link
+            note: '', 
+            id: event.event_id, 
+            icsType: 'acad' 
         });
     });
-
-    // 3. Sprechstunden (Termine)
     todaysAppointments.forEach(app => {
         const appTime = formatShortTime(app.appointment_time);
-        const sortKeyTime = parseInt(appTime.replace(':', ''), 10); // z.B. 1400
-
-        // *** NEUE FILTERLOGIK für Termine (Sprechstunden) ***
-        const timeParts = app.appointment_time.split(':'); // "14:00:00"
-        const duration = parseInt(app.duration, 10) || 15; // z.B. 15
-        
+        const sortKeyTime = parseInt(appTime.replace(':', ''), 10); 
+        const timeParts = app.appointment_time.split(':'); 
+        const duration = parseInt(app.duration, 10) || 15; 
         if (timeParts.length >= 2) {
             const startH = parseInt(timeParts[0], 10);
             const startM = parseInt(timeParts[1], 10);
-            
-            // Simuliere das Enddatum
-            const endM = startM + duration; // z.B. 0 + 15 = 15
-            const endH = startH + Math.floor(endM / 60); // z.B. 14 + 0 = 14
-            const finalEndM = endM % 60; // z.B. 15
-            
-            const endHHMM = (endH * 100) + finalEndM; // z.B. 1400 + 15 = 1415
-
+            const endM = startM + duration; 
+            const endH = startH + Math.floor(endM / 60); 
+            const finalEndM = endM % 60; 
+            const endHHMM = (endH * 100) + finalEndM; 
             if (currentHHMM > endHHMM) {
-                return; // Dieser Termin ist vorbei, überspringe ihn
+                return; 
             }
         }
-        // *** ENDE NEUE LOGIK ***
-
-        // NEU: mainText mit ID für Lehrer
         let mainText = '';
         if (userRole === 'lehrer') {
             mainText = app.class_name 
                 ? `Klasse: ${escapeHtml(app.class_name)} (ID: ${escapeHtml(app.class_id)})` 
                 : 'Schüler';
         }
-
         combinedSchedule.push({
             sortKey: sortKeyTime,
             time: appTime,
             type: 'appointment',
-            class_id: app.class_id, // HINZUGEFÜGT
+            class_id: app.class_id, 
             subject: userRole === 'schueler' ? `Sprechstunde (${escapeHtml(app.teacher_shortcut || app.teacher_name)})` : `Sprechstunde (${escapeHtml(app.student_name)})`,
-            mainText: mainText, // Verwendet die neue Variable
-            room: 'Sprechzimmer',
+            mainText: mainText, 
+            room: app.location || 'N/A', 
             comment: app.notes || '',
-            note: '', // NEU (Keine Notizen für Termine)
+            note: '', 
             id: app.appointment_id,
             icsType: null 
         });
     });
-
     combinedSchedule.sort((a, b) => a.sortKey - b.sortKey);
-
     if (combinedSchedule.length === 0) {
         todayScheduleContainer.innerHTML = '<p class="message info" style="padding: 10px; margin: 0;">Für heute sind keine Einträge (mehr) vorhanden.</p>';
         return;
     }
-
-    // SVG-Icon für den Kalender-Download
     const icsIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M14 0H2a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2M2 1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1H2zM14 15H2a1 1 0 0 1-1-1V5h14v9a1 1 0 0 1-1 1M9 7.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zM6.5 9a.5.5 0 0 1 .5-.5h4a.5.5 0 0 1 0 1h-4a.5.5 0 0 1-.5-.5m-3 2a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z"/></svg>`;
-    // NEU: SVG-Icon für Notiz
     const noteIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 0A1.5 1.5 0 0 0 0 1.5V13a1 1 0 0 0 1 1V1.5a.5.5 0 0 1 .5-.5H14a1 1 0 0 0-1-1zM3.5 2A1.5 1.5 0 0 0 2 3.5v11A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 12.5 2zM3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z"/></svg>`;
-
-
     todayScheduleContainer.innerHTML = combinedSchedule.map(item => {
         const typeClass = `type-${item.type.replace(' ', '')}`;
-        
-        // NEU: Kombiniere Kommentar und Notiz
         let commentHtml = '';
         if (item.comment) {
             commentHtml += `<small class="entry-comment" title="${escapeHtml(item.comment)}">📝 ${escapeHtml(item.comment)}</small>`;
@@ -441,34 +336,27 @@ const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvent
         if (item.note) {
             commentHtml += `<small class="entry-note" title="${escapeHtml(item.note)}">${noteIcon} ${escapeHtml(item.note)}</small>`;
         }
-
-        
         let detailsHtml = `<strong>${escapeHtml(item.subject)}</strong>`;
         if(item.mainText && item.type !== 'Entfall') {
-            // ▼▼▼ HIER IST DIE ÄNDERUNG FÜR "MEIN TAG" ▼▼▼
             if (userRole === 'lehrer' && item.type !== 'appointment' && item.class_id) {
                 detailsHtml += `<span>${escapeHtml(item.mainText)} (ID: ${escapeHtml(item.class_id)})</span>`;
             } else {
                 detailsHtml += `<span>${escapeHtml(item.mainText)}</span>`;
             }
-            // ▲▲▲ ENDE DER ÄNDERUNG ▲▲▲
         }
         if(item.room && item.type !== 'Entfall') detailsHtml += `<span>${escapeHtml(item.room)}</span>`;
-
         let actionButton = '';
         if (item.type === 'appointment') {
             actionButton = `<button class="btn btn-danger btn-small cancel-appointment-btn" data-id="${item.id}" title="Termin stornieren">&times;</button>`;
         }
-
         let icsButtonHtml = '';
-        if (item.icsType === 'acad') { // Für Aufgaben, Klausuren, Infos
+        if (item.icsType === 'acad') { 
             const icsUrl = `${window.APP_CONFIG.baseUrl}/ics/event/acad/${item.id}`;
             icsButtonHtml = `<a href="${icsUrl}" class="btn-ics" title="Zum Kalender hinzufügen">${icsIcon}</a>`;
-        } else if (item.icsType === 'sub') { // Für Sonderevents
+        } else if (item.icsType === 'sub') { 
             const icsUrl = `${window.APP_CONFIG.baseUrl}/ics/event/sub/${item.id}`;
             icsButtonHtml = `<a href="${icsUrl}" class="btn-ics" title="Zum Kalender hinzufügen">${icsIcon}</a>`;
         }
-
         return `
         <div class="today-entry ${typeClass}">
             <div class="time">${escapeHtml(item.time)}</div>
@@ -484,20 +372,14 @@ const renderTodaySchedule = (weeklyTimetable, weeklySubstitutions, academicEvent
         </div>
         `;
     }).join('');
-
     todayScheduleContainer.querySelectorAll('.cancel-appointment-btn').forEach(btn => {
         btn.addEventListener('click', handleCancelAppointment);
     });
 };
 
-/**
- * Renders the weekly timetable grid.
- */
 const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, studentNotes) => {
     const processedCellKeys = new Set();
     const blockSpans = new Map();
-
-    // 1. Reguläre Blöcke
     const blocks = new Map();
     weeklyTimetableData.forEach(entry => {
         if (entry.block_id) {
@@ -515,8 +397,6 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
             processedCellKeys.add(`${startEntry.day_of_week}-${startEntry.period_number + i}`);
         }
     });
-
-    // 2. Vertretungs-Blöcke
     const substitutionBlocks = new Map();
     allWeeklySubstitutions.forEach(sub => {
         if (!sub.day_of_week) return;
@@ -529,7 +409,7 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
             subs.sort((a, b) => a.period_number - b.period_number);
             let isConsecutive = true;
             for (let i = 0; i < subs.length - 1; i++) {
-                if (subs[i + 1].period_number !== subs[i].period_number + 1) {
+                if (parseInt(subs[i + 1].period_number) !== parseInt(subs[i].period_number) + 1) {
                     isConsecutive = false; break;
                 }
             }
@@ -540,52 +420,42 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
                 if (dayNum) {
                     blockSpans.set(`${dayNum}-${startSub.period_number}`, span);
                     for (let i = 1; i < span; i++) {
-                        processedCellKeys.add(`${dayNum}-${startSub.period_number + i}`);
+                        processedCellKeys.add(`${dayNum}-${parseInt(startSub.period_number) + i}`);
                     }
                 }
             }
         }
     });
-
-    // 3. Grid HTML rendern
     let gridHTML = '<div class="timetable-grid">';
     gridHTML += '<div class="grid-header">Zeit</div>';
     days.forEach(day => gridHTML += `<div class="grid-header">${day}</div>`);
-
     const settings = window.APP_CONFIG.settings || {};
     const startHour = parseInt(settings.default_start_hour, 10) || 1;
     const endHour = parseInt(settings.default_end_hour, 10) || 10;
-
     timeSlotsDisplay.forEach((slot, index) => {
         const period = index + 1;
         gridHTML += `<div class="grid-header period-header">${slot}</div>`;
-
         days.forEach((day, dayIndex) => {
-            const dayNum = dayIndex + 1; // 1=Mon, ..., 5=Fri
+            const dayNum = dayIndex + 1; 
             const cellKey = `${dayNum}-${period}`;
-            const noteKey = cellKey; // NEU
-
+            const noteKey = cellKey; 
             if (processedCellKeys.has(cellKey)) { return; }
-
             let cellContent = '', cellClass = 'empty', dataAttrs = `data-day="${dayNum}" data-period="${period}"`, style = '';
             const span = blockSpans.get(cellKey);
             if (span) {
                 style = `grid-row: span ${span};`;
                 cellClass += ' block-start';
             }
-
             const substitution = allWeeklySubstitutions.find(s => s.day_of_week == dayNum && s.period_number == period);
             const entryToRender = weeklyTimetableData.find(e => e.day_of_week == dayNum && e.period_number == period);
-            const note = (userRole === 'schueler' && studentNotes[noteKey]) ? studentNotes[noteKey] : null; // NEU
-
-            dataAttrs = `data-day="${dayNum}" data-period="${period}"`; // Basis-Attribute
-
+            const note = (userRole === 'schueler' && studentNotes[noteKey]) ? studentNotes[noteKey] : null; 
+            dataAttrs = `data-day="${dayNum}" data-period="${period}"`; 
             if (substitution) {
                 cellClass = `has-entry substitution-${substitution.substitution_type}`;
                 dataAttrs += ` data-substitution-id="${substitution.substitution_id}"`;
                 if (substitution.comment) dataAttrs += ` data-comment="${escapeHtml(substitution.comment)}"`;
                 const regularEntry = entryToRender; 
-                if(regularEntry) { // Füge reguläre IDs hinzu, falls vorhanden
+                if(regularEntry) { 
                     dataAttrs += ` data-entry-id="${regularEntry.entry_id}"`;
                     if (regularEntry.block_id) dataAttrs += ` data-block-id="${regularEntry.block_id}"`;
                 }
@@ -600,8 +470,8 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
                     substitution.new_room_name || regularEntry?.room_name,
                     substitution.comment, 
                     substitution.substitution_type,
-                    note, // NEU
-                    substitution.class_id // HINZUGEFÜGT
+                    note, 
+                    substitution.class_id 
                 );
             } else if (entryToRender) {
                 cellClass = 'has-entry';
@@ -609,57 +479,38 @@ const renderWeeklyTimetable = (weeklyTimetableData, allWeeklySubstitutions, stud
                 dataAttrs += ` data-class-id="${entryToRender.class_id}"`;
                 if (entryToRender.block_id) dataAttrs += ` data-block-id="${entryToRender.block_id}"`;
                 const mainText = userRole === 'schueler' ? entryToRender.teacher_shortcut : entryToRender.class_name;
-                cellContent += createCellEntryHtml(entryToRender.subject_shortcut, mainText, entryToRender.room_name, entryToRender.comment, null, note, entryToRender.class_id); // NEU + class_id
+                cellContent += createCellEntryHtml(entryToRender.subject_shortcut, mainText, entryToRender.room_name, entryToRender.comment, null, note, entryToRender.class_id); 
             } else if (period >= startHour && period <= endHour) {
-                // KORREKTUR: Logik für FU
                 if (period === startHour || period === endHour) {
                     cellClass = 'default-entry';
-                    cellContent = createCellEntryHtml('FU', 'Förderunterricht', '', '', null, null, null); // FU anzeigen
+                    cellContent = createCellEntryHtml('FU', 'Förderunterricht', '', '', null, null, null); 
                 } else {
-                    // Bleibt leer (cellClass = 'empty')
                 }
             } else {
-                // Außerhalb des Rasters (z.B. Stunde 11, 12)
-                // Bleibt leer (cellClass = 'empty')
             }
-            
-            // NEU: Füge Notiz-Indikator hinzu, wenn Notiz vorhanden ist
             if (note) {
                 cellClass += ' has-note';
             }
-
             gridHTML += `<div class="grid-cell ${cellClass}" ${dataAttrs} style="${style}">${cellContent}</div>`;
         });
     });
-
     gridHTML += '</div>';
     timetableContainer.innerHTML = gridHTML;
 };
-
-/**
- * Helper to create HTML content for a single cell entry.
- */
-// ▼▼▼ HIER IST DIE ZWEITE ÄNDERUNG (createCellEntryHtml) ▼▼▼
 const createCellEntryHtml = (subject, mainText, room, comment = null, substitutionType = null, note = null, class_id = null) => {
     let commentHtml = comment ? `<small class="entry-comment" title="${escapeHtml(comment)}">📝 ${escapeHtml(comment.substring(0, 15))}${comment.length > 15 ? '...' : ''}</small>` : '';
     let roomHtml = room ? `<small class="entry-room">${escapeHtml(room)}</small>` : '';
-    
-    // ALT: let mainHtml = mainText ? `<span>${escapeHtml(mainText)}</span>` : '';
-    let mainHtml = ''; // NEU
+    let mainHtml = ''; 
     if (mainText) {
-        if (userRole === 'lehrer' && class_id) { // userRole ist global in dashboard.js
+        if (userRole === 'lehrer' && class_id) { 
             mainHtml = `<span>${escapeHtml(mainText)} (ID: ${escapeHtml(class_id)})</span>`;
         } else {
             mainHtml = `<span>${escapeHtml(mainText)}</span>`;
         }
     }
-    
     let subjectHtml = subject ? `<strong>${escapeHtml(subject)}</strong>` : '';
-    // NEU: Notiz-Icon (SVG)
     const noteIcon = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M1.5 0A1.5 1.5 0 0 0 0 1.5V13a1 1 0 0 0 1 1V1.5a.5.5 0 0 1 .5-.5H14a1 1 0 0 0-1-1zM3.5 2A1.5 1.5 0 0 0 2 3.5v11A1.5 1.5 0 0 0 3.5 16h9a1.5 1.5 0 0 0 1.5-1.5v-11A1.5 1.5 0 0 0 12.5 2zM3 3.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 .5.5v11a.5.5 0 0 1-.5.5h-9a.5.5 0 0 1-.5-.5z"/></svg>`;
     let noteHtml = (note && userRole === 'schueler') ? `<small class="entry-note" title="${escapeHtml(note)}">${noteIcon}</small>` : '';
-
-
     if (substitutionType === 'Entfall') {
         subjectHtml = `<strong>${escapeHtml(subject)}</strong>`;
         mainHtml = `<span>Entfällt</span>`;
@@ -675,13 +526,8 @@ const createCellEntryHtml = (subject, mainText, room, comment = null, substituti
         mainHtml = safeComment ? `<span title="${safeComment}">${safeComment.substring(0, 20)}${safeComment.length > 20 ? '...' : ''}</span>` : `<span>Sonderveranst.</span>`;
         commentHtml = '';
     }
-    
-    // KORREKTUR: noteHtml hinzugefügt
     return `<div class="cell-entry">${noteHtml}${subjectHtml}${mainHtml}${roomHtml}${commentHtml}</div>`;
 };
-// ▲▲▲ ENDE DER ÄNDERUNG (createCellEntryHtml) ▲▲▲
-
-/** Function to handle PDF export by redirecting to server */
 const handlePdfExport = () => {
     const year = yearSelector.value;
     const week = weekSelector.value;
@@ -692,16 +538,12 @@ const handlePdfExport = () => {
     const pdfUrl = `${window.APP_CONFIG.baseUrl}/pdf/timetable/${year}/${week}`;
     window.open(pdfUrl, '_blank');
 };
-
-/** Storniert einen Termin */
 const handleCancelAppointment = async (e) => {
     const button = e.target.closest('.cancel-appointment-btn');
     if (!button) return;
-    
     const appointmentId = button.dataset.id;
     const entryElement = button.closest('.today-entry');
     const title = entryElement.querySelector('.details strong').textContent;
-
     if (await showConfirm("Termin stornieren", `Möchten Sie den Termin "${escapeHtml(title)}" wirklich stornieren?`)) {
         button.disabled = true;
         try {
@@ -710,7 +552,6 @@ const handleCancelAppointment = async (e) => {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ appointment_id: appointmentId })
             });
-
             if (response.success) {
                 showToast(response.message, 'success');
                 entryElement.style.transition = 'opacity 0.3s ease, height 0.3s ease, margin 0.3s ease, padding 0.3s ease';
@@ -732,22 +573,15 @@ const handleCancelAppointment = async (e) => {
         }
     }
 };
-
-
 export function initializeDashboard() {
     const container = document.querySelector('.dashboard-wrapper');
     if (!container) return;
-    
-    // Lade Stammdaten sofort
     dashboardState.stammdaten = window.APP_CONFIG.settings.stammdaten || {
         subjects: [], teachers: [], rooms: [], classes: []
     };
-
-    // --- Event Listeners ---
     if (yearSelector) yearSelector.addEventListener('change', loadAndRenderWeeklyData);
     if (weekSelector) weekSelector.addEventListener('change', loadAndRenderWeeklyData);
     if (pdfButton) pdfButton.addEventListener('click', handlePdfExport);
-
     if (copyIcalUrlButton && icalUrlInput) {
         copyIcalUrlButton.addEventListener('click', async () => {
             try {
@@ -772,24 +606,14 @@ export function initializeDashboard() {
             icalUrlInput.blur();
         });
     }
-
-    // --- Tab-Interface Initialisierung ---
     initializeTabbedInterface();
-
-    // --- Initialisierung des Sprechstunden-Widgets (nur für Schüler) ---
     if (userRole === 'schueler') {
         initializeAppointmentBooking();
     }
-    
-    // --- NEU: Event-Listener für Wochenplan-Detail-Modal ---
     initializePlanDetailModal(timetableContainer, detailModal, detailCloseBtn, noteRow, noteInput, noteSaveBtn, noteSpinner);
-
-    // --- Initialization ---
     populateSelectors();
-    loadAndRenderWeeklyData(); // Lädt "Mein Tag" und "Wochenplan"
-    loadAnnouncements(); // Lädt Ankündigungen
-
-    // Hide elements for admin if applicable
+    loadAndRenderWeeklyData(); 
+    loadAnnouncements(); 
     if(userRole === 'admin') {
         const printExportActions = document.querySelector('.print-export-actions');
         if(printExportActions) printExportActions.style.display = 'none';
@@ -798,10 +622,7 @@ export function initializeDashboard() {
     }
 }
 
-
-/**
- * Initialisiert das Sprechstunden-Buchungs-Widget für Schüler.
- */
+// --- FUNKTIONEN FÜR SPRECHSTUNDEN (SCHÜLER) ---
 function initializeAppointmentBooking() {
     const widget = document.getElementById('appointment-booking-widget');
     if (!widget) return;
@@ -810,7 +631,7 @@ function initializeAppointmentBooking() {
     const teacherSearchInput = document.getElementById('teacher-search-input');
     const teacherSearchResults = document.getElementById('teacher-search-results');
     const selectedTeacherIdInput = document.getElementById('selected-teacher-id');
-    const datePicker = document.getElementById('appointment-date-picker');
+    const datePicker = document.getElementById('appointment-date-picker'); 
     const slotsContainer = document.getElementById('available-slots-container');
     const notesContainer = document.getElementById('appointment-notes-container');
     const notesInput = document.getElementById('appointment-notes');
@@ -819,17 +640,52 @@ function initializeAppointmentBooking() {
 
     let searchTimeout;
     let selectedSlot = null; 
+    let datePickerInstance = null; // Variable für die Flatpickr-Instanz
+    let allTeacherSlots = []; // Cache für die Slots des ausgewählten Lehrers
 
-    datePicker.min = new Date().toISOString().split('T')[0];
+    // 1. Flatpickr (Kalender) initialisieren
+    if(datePicker) {
+        // Zerstöre alte Instanz, falls vorhanden (wichtig für Hot-Reloading)
+        if (datePicker._flatpickr) {
+            datePicker._flatpickr.destroy();
+        }
+        
+        datePickerInstance = flatpickr(datePicker, {
+            locale: "de", // Deutsche Lokalisierung (wird in header.php geladen)
+            minDate: "today",
+            dateFormat: "Y-m-d", // Format, das die API versteht
+            altInput: true, // Zeigt ein benutzerfreundliches Format an
+            altFormat: "d.m.Y",
+            disable: [() => true], // Startet komplett deaktiviert
+            onChange: function(selectedDates, dateStr, instance) {
+                // Dies wird ausgelöst, wenn ein (aktivierter) Tag ausgewählt wird
+                if (selectedDates.length > 0) {
+                    renderSlotsForDate(dateStr, allTeacherSlots);
+                }
+            },
+        });
+        // datePicker.disabled = true; // KORREKTUR: Entfernt. Steuerung nur über flatpickr 'disable'.
+    } else {
+        console.error("Element #appointment-date-picker nicht gefunden!");
+        return; // Abbruch, wenn das Hauptelement fehlt
+    }
 
-    // --- 1. Lehrer-Suche ---
+    // 2. Live-Suche für Lehrer
     teacherSearchInput.addEventListener('input', () => {
         clearTimeout(searchTimeout);
         resetSlotSelection();
-        datePicker.disabled = true;
-        datePicker.value = '';
-        selectedTeacherIdInput.value = '';
+        
+        // Kalender zurücksetzen und deaktivieren
+        datePickerInstance.clear();
+        // KORREKTUR: Nicht mehr komplett sperren, sondern nur die aktivierten Tage löschen.
+        // ALT: datePickerInstance.set('disable', [() => true]);
+        datePickerInstance.set('enable', []); // Setzt die aktivierten Tage zurück (deaktiviert effektiv alles)
+        
+        datePicker.placeholder = "Bitte zuerst einen Lehrer auswählen.";
+        allTeacherSlots = [];
 
+        selectedTeacherIdInput.value = '';
+        
         const query = teacherSearchInput.value.trim();
         if (query.length < 2) {
             teacherSearchResults.innerHTML = '';
@@ -839,14 +695,11 @@ function initializeAppointmentBooking() {
 
         searchTimeout = setTimeout(async () => {
             try {
-                // KORREKTUR: API-Endpunkt angepasst (search-colleagues statt -teachers)
-                // KORREKTUR: Sende die Stammdaten-ID (teacher_id), nicht die user_id
                 const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/teacher/search-colleagues?query=${encodeURIComponent(query)}`);
                 if (response.success && response.data) {
                     const filteredTeachers = response.data.filter(t => t.teacher_shortcut !== 'SGL');
                     if (filteredTeachers.length > 0) {
                         teacherSearchResults.innerHTML = filteredTeachers.map(teacher => {
-                            // KORREKTUR: Verwende teacher.teacher_id (Stammdaten-ID)
                             return `
                                 <div class="search-result-item" data-id="${teacher.teacher_id}" data-name="${escapeHtml(teacher.first_name)} ${escapeHtml(teacher.last_name)} (${escapeHtml(teacher.teacher_shortcut)})">
                                     <strong>${escapeHtml(teacher.last_name)}, ${escapeHtml(teacher.first_name)}</strong> (${escapeHtml(teacher.teacher_shortcut)})
@@ -867,86 +720,100 @@ function initializeAppointmentBooking() {
                 teacherSearchResults.innerHTML = `<div class="search-result-item none">Fehler: ${escapeHtml(error.message)}</div>`;
                 teacherSearchResults.classList.add('visible');
             }
-        }, 300);
+        }, 300); 
     });
 
-    // --- 2. Lehrer-Auswahl ---
-    teacherSearchResults.addEventListener('click', (e) => {
+    // 3. Auswahl eines Lehrers -> LÄDT SLOTS UND AKTIVIERT KALENDER
+    teacherSearchResults.addEventListener('click', async (e) => {
         const item = e.target.closest('.search-result-item');
         if (!item || !item.dataset.id) return;
-
-        selectedTeacherIdInput.value = item.dataset.id; // Speichert die teacher_id (Stammdaten)
+        
+        selectedTeacherIdInput.value = item.dataset.id; 
         teacherSearchInput.value = item.dataset.name;
         teacherSearchResults.innerHTML = '';
         teacherSearchResults.classList.remove('visible');
         
-        datePicker.disabled = false;
-        datePicker.focus();
-    });
-
-    // --- 3. Datums-Auswahl (lädt Slots) ---
-    datePicker.addEventListener('change', async () => {
-        resetSlotSelection();
-        const teacherId = selectedTeacherIdInput.value; // Dies ist die teacher_id (Stammdaten)
-        const date = datePicker.value;
-
-        if (!teacherId || !date) return;
-        
-        const dayOfWeek = new Date(date + 'T00:00:00').getDay();
-        if (dayOfWeek === 0 || dayOfWeek === 6) {
-            slotsContainer.innerHTML = '<small class="form-hint error-hint">Sprechstunden finden nur Mo-Fr statt.</small>';
-            return;
-        }
-
+        // Kalender und Slots auf Ladezustand setzen
+        // datePicker.disabled = true; // KORREKTUR: Entfernt
+        datePicker.placeholder = "Lade verfügbare Tage...";
         slotsContainer.innerHTML = '<div class="loading-spinner small"></div>';
-        
+        resetSlotSelection();
+
         try {
-            // KORREKTUR: Sendet teacher_id (Stammdaten-ID)
-            const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/student/available-slots?teacher_id=${teacherId}&date=${date}`);
+            const teacherId = selectedTeacherIdInput.value;
+            // Alle verfügbaren Slots für diesen Lehrer holen
+            const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/student/upcoming-slots?teacher_id=${teacherId}`);
+            
             if (response.success && response.data) {
-                if (response.data.length > 0) {
-                    slotsContainer.innerHTML = response.data.map(slot => `
-                        <button type="button" class="btn-slot" data-time="${slot.time}" data-duration="${slot.duration}">
-                            ${escapeHtml(slot.display)}
-                        </button>
-                    `).join('');
-                } else {
-                    slotsContainer.innerHTML = '<small class="form-hint">Keine freien Termine an diesem Tag.</small>';
-                }
+                allTeacherSlots = response.data || [];
+                // Ein Set von einzigartigen Datumswerten erstellen
+                const availableDates = [...new Set(allTeacherSlots.map(slot => slot.date))];
+                
+                // Flatpickr-Instanz aktualisieren, um NUR DIESE TAGE zu aktivieren
+                datePickerInstance.set('enable', availableDates);
+                
+                // datePicker.disabled = false; // KORREKTUR: Entfernt
+                datePicker.placeholder = "Datum auswählen...";
+                slotsContainer.innerHTML = '<small class="form-hint">Bitte ein verfügbares Datum wählen.</small>';
+
             } else {
                 throw new Error(response.message || 'Fehler beim Laden der Slots.');
             }
         } catch (error) {
             slotsContainer.innerHTML = `<small class="form-hint error-hint">${escapeHtml(error.message)}</small>`;
+            datePicker.placeholder = "Fehler beim Laden";
         }
     });
 
-    // --- 4. Slot-Auswahl ---
+    // 4. (ENTFERNT) Der alte 'change'-Listener auf datePicker wird durch Flatpickr's onChange ersetzt.
+
+    // 5. NEUE Funktion: Rendert die Slots für ein ausgewähltes Datum
+    function renderSlotsForDate(selectedDate, allSlots) {
+        resetSlotSelection(); // Alte Auswahl löschen
+        
+        // Slots für das gewählte Datum filtern
+        const slotsForDate = allSlots.filter(slot => slot.date === selectedDate);
+
+        if (slotsForDate.length > 0) {
+            slotsContainer.innerHTML = slotsForDate.map(slot => {
+                const locationHtml = slot.location ? `<small>${escapeHtml(slot.location)}</small>` : '<small><i>Kein Ort</i></small>';
+                return `
+                    <button type="button" class="btn-slot" 
+                            data-time="${slot.time}" 
+                            data-duration="${slot.duration}"
+                            data-availability-id="${slot.availability_id}"
+                            data-location="${escapeHtml(slot.location || '')}">
+                        <strong>${escapeHtml(slot.display)} Uhr</strong>
+                        ${locationHtml}
+                    </button>
+                `;
+            }).join('');
+        } else {
+            // Sollte dank 'enable' nicht passieren, aber als Fallback
+            slotsContainer.innerHTML = '<small class="form-hint">Keine freien Termine an diesem Tag.</small>';
+        }
+    }
+    
+    // 6. Auswahl eines Slots
     slotsContainer.addEventListener('click', (e) => {
         const button = e.target.closest('.btn-slot');
         if (!button) return;
-
-        slotsContainer.querySelectorAll('.btn-slot').forEach(btn => btn.classList.remove('selected'));
         
+        slotsContainer.querySelectorAll('.btn-slot').forEach(btn => btn.classList.remove('selected'));
         button.classList.add('selected');
+        
         selectedSlot = {
             time: button.dataset.time,
-            duration: button.dataset.duration
+            duration: button.dataset.duration,
+            availability_id: button.dataset.availabilityId,
+            location: button.dataset.location
         };
         
         notesContainer.style.display = 'block';
         bookButton.disabled = false;
     });
-    
-    const resetSlotSelection = () => {
-        selectedSlot = null;
-        slotsContainer.innerHTML = '<small class="form-hint">Bitte Lehrer und Datum wählen.</small>';
-        notesContainer.style.display = 'none';
-        if (notesInput) notesInput.value = '';
-        if (bookButton) bookButton.disabled = true;
-    };
 
-    // --- 5. Buchen ---
+    // 7. Formular absenden (Buchen)
     form.addEventListener('submit', async (e) => {
         e.preventDefault();
         if (!selectedSlot || !selectedTeacherIdInput.value || !datePicker.value) {
@@ -954,15 +821,18 @@ function initializeAppointmentBooking() {
             return;
         }
 
+        const location = selectedSlot.location; 
+
         bookButton.disabled = true;
         bookSpinner.style.display = 'block';
-
+        
         const body = {
-            // KORREKTUR: Sendet teacher_id (Stammdaten-ID)
             teacher_id: selectedTeacherIdInput.value,
-            date: datePicker.value,
+            date: datePicker.value, // Flatpickr stellt sicher, dass dies YYYY-MM-DD ist
             time: selectedSlot.time,
             duration: selectedSlot.duration,
+            availability_id: selectedSlot.availability_id,
+            location: location, 
             notes: notesInput.value.trim() || null
         };
         
@@ -972,19 +842,22 @@ function initializeAppointmentBooking() {
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify(body)
             });
-
             if (response.success) {
                 showToast(response.message, 'success');
                 form.reset();
                 selectedTeacherIdInput.value = '';
-                datePicker.disabled = true;
+                datePickerInstance.clear();
+                datePickerInstance.set('disable', [() => true]);
+                // datePicker.disabled = true; // KORREKTUR: Entfernt
+                datePicker.placeholder = "Bitte zuerst einen Lehrer auswählen.";
                 resetSlotSelection();
-                loadAndRenderWeeklyData(); // Lädt "Mein Tag" neu
+                loadAndRenderWeeklyData(); // Lädt "Mein Tag" neu, um Termin anzuzeigen
             }
         } catch (error) {
              console.error("Fehler beim Buchen:", error);
-             if (error.message.includes('gebu')) {
-                 datePicker.dispatchEvent(new Event('change')); // Löst Neuladen der Slots aus
+             if (error.message.includes('gebu')) { // Slot wurde zwischenzeitlich gebucht
+                 // Lade Slots für den Lehrer neu, um den Kalender zu aktualisieren
+                 teacherSearchResults.dispatchEvent(new Event('click', { target: document.querySelector(`.search-result-item[data-id="${selectedTeacherIdInput.value}"]`) }));
              }
         } finally {
             bookButton.disabled = false;
@@ -992,148 +865,121 @@ function initializeAppointmentBooking() {
         }
     });
 
+    // 8. Hilfsfunktion zum Zurücksetzen der Slot-Auswahl
+    const resetSlotSelection = () => {
+        selectedSlot = null;
+        slotsContainer.innerHTML = '<small class="form-hint">Bitte Lehrer und Datum auswählen.</small>';
+        notesContainer.style.display = 'none';
+        if (notesInput) notesInput.value = '';
+        if (bookButton) bookButton.disabled = true;
+    };
+
+    // 9. Klick ausserhalb schliesst die Lehrersuche
     document.addEventListener('click', (e) => {
         if (widget && !widget.contains(e.target)) {
             teacherSearchResults.classList.remove('visible');
         }
     });
 }
+// --- ENDE SPRECHSTUNDEN-FUNKTIONEN ---
 
-/**
- * NEU: Initialisiert das Tab-Interface.
- */
+
 function initializeTabbedInterface() {
     const wrapper = document.querySelector('.dashboard-wrapper');
     if (!wrapper) return;
     const tabContainer = wrapper.querySelector('.tab-navigation');
     const contentContainer = wrapper.querySelector('.tab-content');
     if (!tabContainer || !contentContainer) return;
-
     const tabButtons = tabContainer.querySelectorAll('.tab-button');
     const tabContents = contentContainer.querySelectorAll('.dashboard-section');
-
-    // Tabs, die bereits initial geladen werden
     const loadedTabs = {
         'section-my-day': true,
         'section-weekly-plan': true,
         'section-announcements': true,
     };
-
-
     tabContainer.addEventListener('click', (e) => {
         const clickedButton = e.target.closest('.tab-button');
         if (!clickedButton || clickedButton.classList.contains('active')) return;
-        
         tabButtons.forEach(btn => btn.classList.remove('active'));
         tabContents.forEach(content => content.classList.remove('active'));
-
         clickedButton.classList.add('active');
         const targetId = clickedButton.dataset.target;
         const targetContent = document.getElementById(targetId);
-
         if (targetContent) {
             targetContent.classList.add('active');
-            
-            // Prüfen, ob der Tab-Inhalt "lazy loaded" werden muss
             if (!loadedTabs[targetId]) {
-                // Lazy loading für Community Board (Schüler)
                 if (targetId === 'section-community-board') {
                     if (window.initializeDashboardCommunity) {
                         window.initializeDashboardCommunity();
                     }
                 }
-                // NEU: Lazy loading für "Meine Beiträge" (Schüler)
                 else if (targetId === 'section-my-posts') {
-                    if (initializeMyCommunityPosts) { // Verwende die importierte Funktion
+                    if (initializeMyCommunityPosts) { 
                         initializeMyCommunityPosts();
                     }
                 }
-                // Lazy loading für Lehrer-Tabs
                 else if (targetId === 'section-attendance' || targetId === 'section-events' || targetId === 'section-office-hours' || targetId === 'section-colleague-search') {
                      if (window.initializeTeacherCockpit) {
-                         // Diese Funktion initialisiert ALLE Lehrer-Tabs beim ersten Klick auf einen von ihnen
                          window.initializeTeacherCockpit(); 
-                         // Markiere alle Lehrer-Tabs als geladen, um Mehrfach-Initialisierung zu vermeiden
                          loadedTabs['section-attendance'] = true;
                          loadedTabs['section-events'] = true;
                          loadedTabs['section-office-hours'] = true;
                          loadedTabs['section-colleague-search'] = true;
                      }
                 }
-                
-                loadedTabs[targetId] = true; // Markiere diesen Tab als geladen
+                loadedTabs[targetId] = true; 
             }
         }
     });
 }
-
-/**
- * NEU: Initialisiert das Modal für die Stundendetails.
- */
 function initializePlanDetailModal(timetableContainer, modal, closeBtn, noteRow, noteInput, noteSaveBtn, noteSpinner) {
     if (!timetableContainer || !modal || !closeBtn) {
         console.warn("Detail-Modal-Initialisierung übersprungen: Elemente fehlen.", {timetableContainer, modal, closeBtn});
         return;
     }
-
     const state = {
-        currentSlotKey: null, // z.B. "1-2" (day-period)
+        currentSlotKey: null, 
         isSaving: false
     };
-
     const close = () => modal.classList.remove('visible');
-
     closeBtn.addEventListener('click', close);
     modal.addEventListener('click', (e) => {
         if (e.target.id === 'plan-detail-modal') {
             close();
         }
     });
-
-    // Event-Listener am Haupt-Grid-Container (nur für den Wochenplan-Tab)
     timetableContainer.addEventListener('click', (e) => {
         const cell = e.target.closest('.grid-cell.has-entry');
         if (!cell || e.target.closest('a') || cell.classList.contains('dragging')) {
             return;
         }
-        
-        // Daten aus dem globalen State holen
         const { stammdaten, currentTimetable, currentSubstitutions, studentNotes } = dashboardState;
-        
-        // IDs aus der Zelle extrahieren
         const day = cell.dataset.day;
         const period = cell.dataset.period;
         const entryId = cell.dataset.entryId;
         const blockId = cell.dataset.blockId;
         const substitutionId = cell.dataset.substitutionId;
-
-        state.currentSlotKey = `${day}-${period}`; // Speichere den Slot für das Speichern der Notiz
-
-        let data = {}; // Hier sammeln wir die Infos
+        state.currentSlotKey = `${day}-${period}`; 
+        let data = {}; 
         let status = "Regulär";
         let statusClass = "status-regular";
-
         let entry = null;
         if (blockId) {
             entry = currentTimetable.find(e => e.block_id === blockId && e.day_of_week == day);
         } else if (entryId) {
             entry = currentTimetable.find(e => e.entry_id == entryId);
         }
-        
         let substitution = substitutionId ? currentSubstitutions.find(s => s.substitution_id == substitutionId) : null;
-
         if (substitution) {
             const regularEntry = entry; 
             status = substitution.substitution_type;
             statusClass = `status-${substitution.substitution_type.toLowerCase()}`;
-            
             data.subject = substitution.new_subject_shortcut || regularEntry?.subject_shortcut || 'N/A';
             data.teacher = substitution.new_teacher_shortcut || (userRole === 'schueler' ? regularEntry?.teacher_shortcut : null) || 'N/A';
             data.room = substitution.new_room_name || regularEntry?.room_name || 'N/A';
             data.class = substitution.class_name || regularEntry?.class_name || 'N/A';
             data.comment = substitution.comment || regularEntry?.comment || '';
-        
-        } else if (entry) { // Regulärer Eintrag
+        } else if (entry) { 
             status = "Regulär";
             statusClass = "status-regular";
             data.subject = entry.subject_shortcut;
@@ -1142,45 +988,34 @@ function initializePlanDetailModal(timetableContainer, modal, closeBtn, noteRow,
             data.class = entry.class_name;
             data.comment = entry.comment || '';
         } else {
-            return; // Nichts zu anzeigen (FU oder leer)
+            return; 
         }
-
-        // Fülle das Modal
         document.getElementById('detail-status').textContent = status;
         document.getElementById('detail-status').className = `detail-value ${statusClass}`;
-        
-        // Zeit-Logik (prüft auf Block)
-        // KORREKTUR: Verwende die globale Variable 'timeSlotsDisplay'
         const span = blockId ? (currentTimetable.filter(e => e.block_id === blockId).length) : 1;
         let timeText;
         if (span > 1) {
             const startPeriod = parseInt(period);
             const endPeriod = startPeriod + span - 1;
             const startTime = formatTimeSlot(startPeriod);
-            const endTime = timeSlotsDisplay[endPeriod - 1]?.split(' - ')[1] || '??:??'; // KORRIGIERT
-            timeText = `${days[day-1]}, ${startPeriod}. - ${endPeriod}. Stunde (${startTime} - ${endTime})`; // KORRIGIERT
+            const endTime = timeSlotsDisplay[endPeriod - 1]?.split(' - ')[1] || '??:??'; 
+            timeText = `${days[day-1]}, ${startPeriod}. - ${endPeriod}. Stunde (${startTime} - ${endTime})`; 
         } else {
-            timeText = `${days[day-1]}, ${period}. Stunde (${timeSlotsDisplay[period-1]})`; // KORRIGIERT
+            timeText = `${days[day-1]}, ${period}. Stunde (${timeSlotsDisplay[period-1]})`; 
         }
         document.getElementById('detail-time').textContent = timeText;
-        
-        // Volle Namen aus Stammdaten holen (falls vorhanden)
         const subjectFull = stammdaten.subjects?.find(s => s.subject_shortcut === data.subject)?.subject_name || data.subject;
         const teacherFull = stammdaten.teachers?.find(t => t.teacher_shortcut === data.teacher);
         const teacherName = teacherFull ? `${teacherFull.first_name} ${teacherFull.last_name} (${teacherFull.teacher_shortcut})` : (data.teacher || 'N/A');
-        
         document.getElementById('detail-subject').textContent = subjectFull || 'N/A';
-        
         const teacherRow = document.getElementById('detail-teacher');
         const classRow = document.getElementById('detail-class');
-        
         if (userRole === 'schueler' && teacherRow) {
             teacherRow.textContent = teacherName;
         } else if (userRole === 'lehrer' && classRow) {
             classRow.textContent = data.class || 'N/A';
         }
         document.getElementById('detail-room').textContent = data.room || 'N/A';
-
         const commentRow = document.getElementById('detail-comment-row');
         if (data.comment) {
             document.getElementById('detail-comment').textContent = data.comment;
@@ -1188,33 +1023,26 @@ function initializePlanDetailModal(timetableContainer, modal, closeBtn, noteRow,
         } else {
             commentRow.style.display = 'none';
         }
-
-        // NEU: Notiz-Logik für Schüler
         if (userRole === 'schueler' && noteRow && noteInput) {
             const noteKey = state.currentSlotKey;
             const currentNote = studentNotes[noteKey] || '';
             noteInput.value = currentNote;
-            noteRow.style.display = 'flex'; // Mache die Notiz-Sektion sichtbar
+            noteRow.style.display = 'flex'; 
             if(noteSaveBtn) noteSaveBtn.disabled = false;
             if(noteSpinner) noteSpinner.style.display = 'none';
         }
-
         modal.classList.add('visible');
     });
-
-    // NEU: Event-Listener für Notiz-Speichern (nur für Schüler)
     if (userRole === 'schueler' && noteSaveBtn && noteInput && noteSpinner) {
         noteSaveBtn.addEventListener('click', async () => {
             if (state.isSaving || !state.currentSlotKey) return;
             state.isSaving = true;
             noteSaveBtn.disabled = true;
             noteSpinner.style.display = 'inline-block';
-
             const [day, period] = state.currentSlotKey.split('-');
             const year = yearSelector.value;
             const week = weekSelector.value;
             const content = noteInput.value.trim();
-
             const body = {
                 year: parseInt(year),
                 calendar_week: parseInt(week),
@@ -1222,28 +1050,23 @@ function initializePlanDetailModal(timetableContainer, modal, closeBtn, noteRow,
                 period_number: parseInt(period),
                 note_content: content
             };
-
             try {
                 const response = await apiFetch(`${window.APP_CONFIG.baseUrl}/api/student/note/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body)
                 });
-
                 if (response.success) {
                     showToast('Notiz gespeichert!', 'success');
-                    // Aktualisiere den globalen Notiz-State
                     if (content) {
                         dashboardState.studentNotes[state.currentSlotKey] = content;
                     } else {
                         delete dashboardState.studentNotes[state.currentSlotKey];
                     }
-                    // Rendere die Grids neu, um Notiz-Indikatoren zu aktualisieren
                     renderWeeklyTimetable(dashboardState.currentTimetable, dashboardState.currentSubstitutions, dashboardState.studentNotes);
-                    renderTodaySchedule(dashboardState.currentTimetable, dashboardState.currentSubstitutions, [], [], dashboardState.studentNotes); // TODO: Events/Appointments müssten hier neu geladen oder übergeben werden
-                    close(); // Schließe das Modal nach dem Speichern
+                    renderTodaySchedule(dashboardState.currentTimetable, dashboardState.currentSubstitutions, [], [], dashboardState.studentNotes); 
+                    close(); 
                 }
-                // Fehler wird von apiFetch als Toast angezeigt
             } catch (error) {
                 console.error("Fehler beim Speichern der Notiz:", error);
             } finally {

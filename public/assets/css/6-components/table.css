@@ -1,0 +1,187 @@
+/* public/assets/css/6-components/table.css */
+.table-container {
+    width: 100%;
+    margin-top: 20px;
+}
+
+.table-responsive {
+    overflow-x: auto;
+    width: 100%;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    border-spacing: 0;
+}
+
+.data-table th,
+.data-table td {
+    padding: 12px 15px;
+    border-bottom: 1px solid var(--color-border);
+    text-align: left;
+    vertical-align: middle;
+    white-space: nowrap; /* Standard für Desktop */
+}
+
+.data-table th {
+    background-color: var(--color-surface-alt);
+    font-weight: 600;
+    font-size: 0.9rem;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dark-mode .data-table th {
+    background-color: var(--color-surface-alt);
+}
+
+.data-table tbody tr:nth-child(even) {
+    background-color: #fcfdff;
+}
+
+.dark-mode .data-table tbody tr:nth-child(even) {
+    background-color: #ffffff05;
+}
+
+.data-table tbody tr:hover {
+    background-color: #f1f5f9;
+}
+
+.dark-mode .data-table tbody tr:hover {
+    background-color: #ffffff0d;
+}
+
+.data-table .actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.data-table .actions .btn-small {
+    padding: 5px 10px;
+    font-size: 0.8rem;
+    width: auto;
+    border-radius: 5px;
+    flex-grow: 1;
+    flex-basis: 0;
+    text-align: center;
+    margin-bottom: 0;
+}
+
+/* === NEU: Responsive Card-Ansicht für Tabellen === */
+
+@media (max-width: 768px) {
+    .table-responsive {
+        border: none; /* Container-Rand entfernen */
+        overflow-x: hidden; /* Kein horizontales Scrollen mehr */
+    }
+
+    .data-table {
+        border: none;
+        box-shadow: none;
+    }
+
+    .data-table thead {
+        /* Wichtige Header verstecken */
+        border: none;
+        clip: rect(0 0 0 0);
+        height: 1px;
+        margin: -1px;
+        overflow: hidden;
+        padding: 0;
+        position: absolute;
+        width: 1px;
+    }
+
+    .data-table tr {
+        /* Jede Zeile wird eine "Karte" */
+        display: block;
+        margin-bottom: 15px;
+        border: 1px solid var(--color-border);
+        border-radius: 8px;
+        box-shadow: 0 3px 6px rgba(0,0,0,0.04);
+        background-color: var(--color-surface);
+        overflow: hidden; /* Für abgerundete Ecken */
+    }
+
+    .dark-mode .data-table tr {
+        background-color: var(--color-surface-alt);
+    }
+    
+    .data-table tr:nth-child(even) {
+        background-color: var(--color-surface); /* Einheitliche Hintergrundfarbe für alle "Karten" */
+    }
+    
+    .dark-mode .data-table tr:nth-child(even) {
+        background-color: var(--color-surface-alt);
+    }
+
+    .data-table td {
+        display: flex; /* Flexbox für Label/Inhalt-Paarung */
+        justify-content: space-between; /* Label links, Inhalt rechts */
+        align-items: center;
+        padding: 10px 15px;
+        border-bottom: 1px solid var(--color-border);
+        white-space: normal; /* Zeilenumbruch erlauben */
+        text-align: right; /* Inhalt rechtsbündig */
+        font-size: 0.9rem;
+    }
+    
+    .data-table td:last-child {
+        border-bottom: none; /* Letzte Zelle hat keine Linie */
+    }
+
+    .data-table td::before {
+        /* data-label Attribut als Label verwenden */
+        content: attr(data-label);
+        font-weight: 600;
+        color: var(--color-text-muted);
+        text-align: left;
+        padding-right: 15px;
+        white-space: nowrap;
+    }
+
+    /* Spezielle Behandlung für die Aktions-Spalte */
+    .data-table td.actions {
+        padding: 10px 15px;
+        background-color: var(--color-surface-alt);
+        justify-content: flex-end; /* Buttons rechtsbündig */
+    }
+    
+    .dark-mode .data-table td.actions {
+         background-color: var(--color-surface);
+    }
+
+    .data-table td.actions::before {
+        display: none; /* Kein Label für "Aktionen" */
+    }
+    
+    .data-table .actions .btn-small {
+        flex-grow: 0; /* Buttons nicht mehr strecken */
+        flex-basis: auto;
+        width: auto;
+    }
+
+    /* Anpassung für Audit-Log-Details */
+    .log-details-cell {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+    }
+    .log-details-cell::before {
+        width: 100%;
+        margin-bottom: 5px;
+    }
+    .log-details-cell details {
+        width: 100%;
+        text-align: left;
+    }
+    .log-details-cell pre {
+        max-width: 100%;
+        font-size: 0.7rem;
+    }
+}

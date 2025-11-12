@@ -1,15 +1,11 @@
 <?php
-// pages/admin/community_moderation.php
 include_once dirname(__DIR__) . '/partials/header.php';
-// $pendingPosts und $approvedPosts werden vom CommunityController->index() übergeben
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">Moderation Schwarzes Brett</h1>
     <div class="dashboard-grid">
         <?php include_once __DIR__ . '/partials/_sidebar.php'; ?>
         <main class="dashboard-content" id="community-moderation">
-
             <!-- NEU: Tab Navigation -->
             <nav class="tab-navigation">
                 <button class="tab-button active" data-target="pending-section">
@@ -19,15 +15,12 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     Freigegeben (<?php echo count($approvedPosts); ?>)
                 </button>
             </nav>
-
             <!-- NEU: Tab Content Wrapper -->
             <div class="tab-content">
-
                 <!-- Tab 1: Ausstehende Beiträge -->
                 <div class="dashboard-section active" id="pending-section">
                     <h3>Ausstehende Beiträge</h3>
                     <p>Diese Beiträge wurden von Schülern erstellt und warten auf Freigabe.</p>
-                    
                     <div id="pending-posts-list" class="posts-list-container">
                         <?php if (empty($pendingPosts)): ?>
                             <p class="message info">Aktuell gibt es keine Beiträge, die moderiert werden müssen.</p>
@@ -54,12 +47,10 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         <?php endif; ?>
                     </div>
                 </div> <!-- Ende #pending-section -->
-                
                 <!-- Tab 2: Freigegebene Beiträge -->
                 <div class="dashboard-section" id="approved-section">
                     <h3>Freigegebene Beiträge</h3>
                     <p>Dies sind alle aktuell sichtbaren Beiträge auf dem Schwarzen Brett. Sie können hier bereits freigegebene Beiträge wieder löschen.</p>
-                    
                     <div id="approved-posts-list" class="posts-list-container">
                         <?php if (empty($approvedPosts)): ?>
                             <p class="message info">Aktuell sind keine Beiträge freigegeben.</p>
@@ -88,14 +79,10 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         <?php endif; ?>
                     </div>
                 </div> <!-- Ende #approved-section -->
-
             </div> <!-- Ende .tab-content -->
-            
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>
-

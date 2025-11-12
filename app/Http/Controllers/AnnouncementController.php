@@ -1,34 +1,23 @@
 <?php
-// app/Http/Controllers/AnnouncementController.php
-
-// MODIFIZIERT:
-// 1. FileUploadService importiert und im Konstruktor injiziert.
-// 2. Die createAnnouncement()-Methode verwendet jetzt $this->fileUploadService->handleUpload().
-// 3. Die manuelle Logik für Datei-Upload (MIME-Typ, Größe, Verschieben) wurde entfernt.
-
 namespace App\Http\Controllers;
-
 use App\Core\Database;
 use App\Core\Security;
 use App\Repositories\AnnouncementRepository;
 use App\Repositories\UserRepository;
-use App\Http\Traits\ApiHandlerTrait;
-use App\Services\FileUploadService; // NEU: Service importieren
 use Exception;
 use PDO;
-use Parsedown;
+use \Parsedown;
 use App\Services\AuditLogger;
+use App\Http\Traits\ApiHandlerTrait; // NEU
 
 class AnnouncementController
 {
-    use ApiHandlerTrait;
+    use ApiHandlerTrait; // NEU
 
     private PDO $pdo;
     private AnnouncementRepository $announcementRepo;
     private UserRepository $userRepo;
     private Parsedown $parsedown;
-    private FileUploadService $fileUploadService; // NEU
-
     public function __construct()
     {
         $this->pdo = Database::getInstance();
@@ -36,33 +25,25 @@ class AnnouncementController
         $this->userRepo = new UserRepository($this->pdo);
         $this->parsedown = new Parsedown();
         $this->parsedown->setSafeMode(true);
-        $this->fileUploadService = new FileUploadService(); // NEU
     }
 
-    /**
-     * API: Holt Ankündigungen basierend auf der Rolle des Benutzers. (GET)
-     * (Unverändert)
-     */
+    // ENTFERNT: Lokale handleApiRequest Methode
+
     public function getAnnouncements()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_GET
-            
+        $this->handleApiRequest(function($data) {
             $userId = $_SESSION['user_id'];
             $userRole = $_SESSION['user_role'];
             $user = $this->userRepo->findById($userId);
-
             if (!$user) {
-                throw new Exception("Benutzer nicht gefunden.", 404);
+                throw new Exception("Benutzer nicht gefunden.");
             }
-
             $classId = ($userRole === 'schueler' && isset($user['class_id'])) ? $user['class_id'] : null;
             $announcements = $this->announcementRepo->getVisibleAnnouncements($userRole, $classId);
-
             foreach ($announcements as &$announcement) {
                 $author = $this->userRepo->findById($announcement['user_id']);
                 $announcement['author_name'] = $author ? ($author['first_name'] . ' ' . $author['last_name']) : 'Unbekannt';
                 $announcement['content_html'] = $this->parsedown->text($announcement['content'] ?? '');
-
                 if (!empty($announcement['file_path'])) {
                     $announcement['file_url'] = rtrim(Database::getConfig()['base_url'], '/') . '/' . ltrim($announcement['file_path'], '/');
                 } else {
@@ -71,40 +52,30 @@ class AnnouncementController
                 $announcement['visibility'] = $announcement['is_global'] ? 'global' : 'class';
             }
             unset($announcement);
-
-            return [
-                'json_response' => ['success' => true, 'data' => $announcements]
-            ];
-
+            echo json_encode(['success' => true, 'data' => $announcements], JSON_THROW_ON_ERROR);
+            
+            return ['is_get_request' => true];
         }, [
             'inputType' => 'get',
-            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin']
+            'checkRole' => ['schueler', 'lehrer', 'planer', 'admin'] // Entspricht requireLogin()
         ]);
     }
 
-    /**
-     * API: Erstellt eine neue Ankündigung. (POST/FormData)
-     * MODIFIZIERT: Nutzt jetzt FileUploadService.
-     */
     public function createAnnouncement()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
-            
+        $this->handleApiRequest(function($data) { // $data kommt von $_POST
             $userId = $_SESSION['user_id'];
             $userRole = $_SESSION['user_role'];
             $title = trim($data['title'] ?? '');
             $content = trim($data['content'] ?? '');
-
             if (empty($title) || empty($content)) {
-                throw new Exception("Titel und Inhalt dürfen nicht leer sein.", 400);
+                throw new Exception("Titel und Inhalt dürfen nicht leer sein.");
             }
-
-            // --- Zielgruppen-Logik (unverändert) ---
             $targetRole = 'all';
             $targetClassId = null;
             if ($userRole === 'lehrer') {
                 $targetClassId = filter_var($data['target_class_id'] ?? null, FILTER_VALIDATE_INT);
-                if (!$targetClassId) { throw new Exception("Lehrer müssen eine Klasse auswählen.", 400); }
+                if (!$targetClassId) { throw new Exception("Lehrer müssen eine Klasse auswählen."); }
                 $targetRole = 'schueler';
             }
             elseif (in_array($userRole, ['admin', 'planer'])) {
@@ -114,43 +85,29 @@ class AnnouncementController
                 $selectedClassId = filter_var($data['target_class_id'] ?? null, FILTER_VALIDATE_INT);
                 $selectedClassId = ($selectedClassId === false || $selectedClassId === 0) ? null : $selectedClassId;
                 $checkedCount = ($isGlobal ? 1 : 0) + ($isTeacher ? 1 : 0) + ($isPlaner ? 1 : 0);
-
-                if ($checkedCount > 1) { throw new Exception("Bitte nur eine Zielgruppen-Checkbox auswählen.", 400); }
+                if ($checkedCount > 1) { throw new Exception("Bitte nur eine Zielgruppen-Checkbox auswählen."); }
                 elseif ($checkedCount === 1) {
                     if ($isGlobal) $targetRole = 'all'; elseif ($isTeacher) $targetRole = 'lehrer'; elseif ($isPlaner) $targetRole = 'planer';
                     $targetClassId = null;
                 } elseif ($selectedClassId !== null) {
                     $targetRole = 'schueler'; $targetClassId = $selectedClassId;
                 } else { $targetRole = 'all'; $targetClassId = null; }
-            } else { throw new Exception("Unbekannte Benutzerrolle.", 403); }
+            } else { throw new Exception("Unbekannte Benutzerrolle."); }
 
-            // --- NEU: Datei-Upload über Service ---
             $attachmentPath = null;
             if (isset($_FILES['attachment']) && $_FILES['attachment']['error'] === UPLOAD_ERR_OK) {
-                if (!in_array($userRole, ['admin', 'planer'])) { 
-                    throw new Exception("Nur Admins und Planer dürfen Dateien anhängen.", 403); 
-                }
-                
-                // Erlaube gängige Dokumenten- und Bildtypen
-                $allowedMimes = [
-                    'image/jpeg' => 'jpg',
-                    'image/png' => 'png',
-                    'application/pdf' => 'pdf',
-                    'application/msword' => 'doc',
-                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document' => 'docx'
-                ];
-                
-                // Der Service wirft bei Fehlern (Größe, Typ, Verschieben) eine Exception
-                $attachmentPath = $this->fileUploadService->handleUpload(
-                    'attachment',
-                    'announcements',
-                    $allowedMimes,
-                    5 * 1024 * 1024 // 5MB Limit
-                );
+                if (!in_array($userRole, ['admin', 'planer'])) { throw new Exception("Nur Admins und Planer dürfen Dateien anhängen."); }
+                $uploadDir = dirname(__DIR__, 2) . '/public/uploads/announcements/';
+                if (!is_dir($uploadDir)) { if (!mkdir($uploadDir, 0775, true)) { throw new Exception("Upload-Verzeichnis konnte nicht erstellt werden."); } }
+                $fileName = uniqid('', true) . '_' . basename($_FILES['attachment']['name']); $targetFile = $uploadDir . $fileName;
+                $allowedTypes = ['image/jpeg', 'image/png', 'application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                $fileType = mime_content_type($_FILES['attachment']['tmp_name']);
+                if (!in_array($fileType, $allowedTypes)) { throw new Exception("Ungültiger Dateityp."); }
+                if ($_FILES['attachment']['size'] > 5 * 1024 * 1024) { throw new Exception("Datei ist zu groß (max. 5MB)."); }
+                if (move_uploaded_file($_FILES['attachment']['tmp_name'], $targetFile)) { $attachmentPath = 'uploads/announcements/' . $fileName; }
+                else { throw new Exception("Fehler beim Hochladen der Datei."); }
             }
-            // --- ENDE NEU ---
 
-            // Speichern
             $newId = $this->announcementRepo->createAnnouncement(
                 $userId,
                 $title,
@@ -159,87 +116,64 @@ class AnnouncementController
                 $targetClassId,
                 $attachmentPath
             );
-
-            // Daten für Rückgabe holen
             $newAnnouncement = $this->announcementRepo->getAnnouncementById($newId);
             if ($newAnnouncement) {
                 $newAnnouncement['content_html'] = $this->parsedown->text($newAnnouncement['content'] ?? '');
                 $author = $this->userRepo->findById($newAnnouncement['user_id']);
                 $newAnnouncement['author_name'] = $author ? ($author['first_name'] . ' ' . $author['last_name']) : 'Unbekannt';
                 if (!empty($newAnnouncement['file_path'])) {
-                     $newAnnouncement['file_url'] = rtrim(Database::getConfig()['base_url'], '/') . '/' . ltrim($newAnnouncement['file_path'], '/');
+                    $newAnnouncement['file_url'] = rtrim(Database::getConfig()['base_url'], '/') . '/' . ltrim($newAnnouncement['file_path'], '/');
                 } else {
-                   $newAnnouncement['file_url'] = null;
+                    $newAnnouncement['file_url'] = null;
                 }
                 $newAnnouncement['visibility'] = $newAnnouncement['is_global'] ? 'global' : 'class';
             }
-            
-            // Log-Details
-            $logDetails = [
-                'title' => $title, 
-                'target_role' => $targetRole, 
-                'target_class_id' => $targetClassId,
-                'has_attachment' => !empty($attachmentPath)
-            ];
 
-            // Rückgabe für Trait
+            echo json_encode(['success' => true, 'message' => 'Ankündigung erfolgreich erstellt.', 'data' => $newAnnouncement], JSON_THROW_ON_ERROR);
+
             return [
-                'json_response' => ['success' => true, 'message' => 'Ankündigung erfolgreich erstellt.', 'data' => $newAnnouncement],
                 'log_action' => 'create_announcement',
                 'log_target_type' => 'announcement',
                 'log_target_id' => $newId,
-                'log_details' => $logDetails
+                'log_details' => [
+                    'title' => $title,
+                    'target_role' => $targetRole,
+                    'target_class_id' => $targetClassId,
+                    'has_attachment' => !empty($attachmentPath)
+                ]
             ];
-
         }, [
-            'inputType' => 'form',
+            'inputType' => 'form', // Wegen $_FILES
             'checkRole' => ['admin', 'planer', 'lehrer']
         ]);
     }
 
-    /**
-     * API: Löscht eine Ankündigung. (POST/FormData)
-     * MODIFIZIERT: Nutzt jetzt FileUploadService zum Löschen der Datei.
-     */
     public function deleteAnnouncement()
     {
-        $this->handleApiRequest(function($data) { // $data ist $_POST
-            
+        $this->handleApiRequest(function($data) { // $data von $_POST
             $userId = $_SESSION['user_id'];
             $userRole = $_SESSION['user_role'];
             $announcementId = filter_var($data['announcement_id'] ?? null, FILTER_VALIDATE_INT);
-
-            if (!$announcementId) { throw new Exception("Ungültige Ankündigungs-ID.", 400); }
+            if (!$announcementId) { throw new Exception("Ungültige Ankündigungs-ID."); }
             $announcement = $this->announcementRepo->getAnnouncementById($announcementId);
-            if (!$announcement) { throw new Exception("Ankündigung nicht gefunden.", 404); }
-            
-            if ($userRole === 'lehrer' && $announcement['user_id'] !== $userId) { 
-                 throw new Exception("Sie sind nicht berechtigt, diese Ankündigung zu löschen.", 403); 
+            if (!$announcement) { throw new Exception("Ankündigung nicht gefunden."); }
+            if ($userRole === 'lehrer' && $announcement['user_id'] !== $userId) {
+                throw new Exception("Sie sind nicht berechtigt, diese Ankündigung zu löschen.");
             }
-
-            // NEU: Datei löschen, BEVOR der DB-Eintrag entfernt wird
-            $filePathToDelete = $announcement['file_path'] ?? null;
-            if ($filePathToDelete) {
-                $this->fileUploadService->deleteFile($filePathToDelete);
-                // Wir loggen Fehler beim Löschen, aber stoppen den Vorgang nicht
-            }
-
-            // DB-Eintrag löschen
             $success = $this->announcementRepo->deleteAnnouncement($announcementId);
-            if (!$success) { 
-                 throw new Exception("Fehler beim Löschen der Ankündigung aus der Datenbank.", 500); 
+            if ($success) {
+                echo json_encode(['success' => true, 'message' => 'Ankündigung erfolgreich gelöscht.'], JSON_THROW_ON_ERROR);
             }
-            
-            $logDetails = ['title' => $announcement['title'] ?? 'N/A'];
+            else {
+                throw new Exception("Fehler beim Löschen der Ankündigung.");
+            }
             
             return [
-                 'json_response' => ['success' => true, 'message' => 'Ankündigung erfolgreich gelöscht.'],
-                 'log_action' => 'delete_announcement',
-                 'log_target_type' => 'announcement',
-                 'log_target_id' => $announcementId,
-                 'log_details' => $logDetails
+                'log_action' => 'delete_announcement',
+                'log_target_type' => 'announcement',
+                'log_target_id' => $announcementId,
+                'log_details' => ['title' => $announcement['title'] ?? 'N/A']
             ];
-
         }, [
             'inputType' => 'form',
             'checkRole' => ['admin', 'planer', 'lehrer']

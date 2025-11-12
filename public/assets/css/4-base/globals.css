@@ -1,0 +1,26 @@
+/* public/assets/css/4-base/globals.css */
+body {
+    background-color: var(--color-background);
+    color: var(--color-text);
+    font-family: var(--font-body);
+    margin: 0;
+    padding-top: 80px; /* Platz für den fixierten Header */
+    display: flex;
+    flex-direction: column;
+    
+
+    min-height: 100vh; 
+    box-sizing: border-box; 
+    font-size: var(--font-size-base);
+}
+
+a {
+    color: var(--color-primary);
+    text-decoration: none;
+    transition: color 0.2s ease, text-decoration 0.2s ease;
+}
+
+a:hover {
+    color: var(--color-secondary);
+    text-decoration: underline;
+}

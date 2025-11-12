@@ -1,24 +1,17 @@
 <?php
-// pages/admin/dashboard.php
 include_once dirname(__DIR__) . '/partials/header.php';
-// $dashboardData wird vom Controller übergeben
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">Admin Dashboard</h1>
     <div class="dashboard-grid">
         <?php include_once __DIR__ . '/partials/_sidebar.php'; ?>
         <main class="dashboard-content" id="admin-dashboard-overview">
-
             <?php if (isset($dashboardData['error'])): ?>
                 <div class="message error"><?php echo htmlspecialchars($dashboardData['error']); ?></div>
             <?php endif; ?>
-
             <div class="dashboard-widget-grid" id="dashboard-widget-grid">
-
                 <div class="dashboard-widget widget-stats" draggable="true" id="widget-stats">
                     <h3>📊 Systemübersicht</h3>
-                    
                     <div class="stat-grid">
                         <div class="stat-item main-stat">
                             <span class="stat-value"><?php echo $dashboardData['totalUsers'] ?? 0; ?></span>
@@ -61,7 +54,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </div>
                     </div>
                 </div>
-
                 <div class="dashboard-widget widget-maintenance" draggable="true" id="widget-maintenance">
                     <h3>🔧 Wartungsmodus</h3>
                     <div class="setting-control" style="justify-content: space-between;">
@@ -71,7 +63,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                    name="maintenance_mode"
                                    value="1"
                                    <?php echo($dashboardData['settings']['maintenance_mode'] ? 'checked' : ''); ?>
-                                   data-csrf-token="<?php echo htmlspecialchars(\App\Core\Security::getCsrfToken()); ?>"> <?php /* CSRF für JS */ ?>
+                                   data-csrf-token="<?php echo htmlspecialchars(\App\Core\Security::getCsrfToken()); ?>"> <?php  ?>
                             <span class="slider round"></span>
                         </label>
                         <span id="dashboard-maintenance-status" class="toggle-status" style="font-weight: bold;">
@@ -84,7 +76,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     </p>
                     <span id="maintenance-toggle-spinner" class="loading-spinner small" style="display: none; margin-left: 15px;"></span>
                 </div>
-
                 <div class="dashboard-widget widget-publish-status" draggable="true" id="widget-publish-status">
                     <h3>🚀 Veröffentlichungsstatus</h3>
                     <div class="publish-status-group">
@@ -111,7 +102,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     </div>
                     <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('planer/dashboard')); ?>" class="widget-link">Jetzt verwalten &raquo;</a>
                 </div>
-
                 <div class="dashboard-widget widget-activity" draggable="true" id="widget-activity">
                     <h3>🕒 Letzte Aktivitäten</h3>
                     <?php if (!empty($dashboardData['latestLogs'])): ?>
@@ -132,7 +122,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     <?php endif; ?>
                      <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('admin/audit-logs')); ?>" class="widget-link">Vollständiges Log anzeigen &raquo;</a>
                 </div>
-
                  <div class="dashboard-widget widget-quicklinks" draggable="true" id="widget-quicklinks">
                     <h3>🚀 Schnellzugriffe</h3>
                     <div class="quicklink-buttons">
@@ -154,7 +143,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </a>
                     </div>
                 </div>
-
                 <div class="dashboard-widget widget-system-status" draggable="true" id="widget-system-status">
                     <h3>✅ System-Status</h3>
                     <ul class="system-check-list">
@@ -183,8 +171,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                          <span id="cache-clear-spinner" class="loading-spinner small" style="display: none;"></span>
                     </div>
                 </div>
-
-
                 <div class="dashboard-widget widget-system-info" draggable="true" id="widget-system-info">
                     <h3>🖥️ System-Info</h3>
                     <div class="system-info-list">
@@ -202,38 +188,26 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </div>
                     </div>
                 </div>
-
-
             </div> </main>
     </div>
 </div>
-
 <?php
-// Füge spezifisches JS für das Dashboard hinzu (für Wartungsmodus-Schalter)
-// Der Rest wird über main.js gesteuert
 ?>
 <script type="module">
     import { apiFetch } from '<?php echo htmlspecialchars(rtrim($config['base_url'], '/')); ?>/assets/js/api-client.js';
     import { showToast } from '<?php echo htmlspecialchars(rtrim($config['base_url'], '/')); ?>/assets/js/notifications.js';
-
-    // --- Wartungsmodus-Schalter ---
     const maintenanceToggle = document.getElementById('dashboard_maintenance_mode');
     const maintenanceStatus = document.getElementById('dashboard-maintenance-status');
     const maintenanceSpinner = document.getElementById('maintenance-toggle-spinner');
-
     if (maintenanceToggle && maintenanceStatus) {
-        // ... (Wartungsmodus-Logik bleibt unverändert) ...
         maintenanceToggle.addEventListener('change', async () => {
             const isChecked = maintenanceToggle.checked;
             const csrfToken = maintenanceToggle.dataset.csrfToken;
-
             if (maintenanceSpinner) maintenanceSpinner.style.display = 'inline-block';
             maintenanceToggle.disabled = true;
-
             const formData = new FormData();
             formData.append('maintenance_mode', isChecked ? '1' : '0');
             formData.append('_csrf_token', csrfToken);
-            
             formData.append('site_title', <?php echo json_encode($dashboardData['settings']['site_title'] ?? ''); ?>);
             formData.append('maintenance_message', <?php echo json_encode($dashboardData['settings']['maintenance_message'] ?? ''); ?>);
             formData.append('maintenance_whitelist_ips', <?php echo json_encode($dashboardData['settings']['maintenance_whitelist_ips'] ?? ''); ?>);
@@ -245,13 +219,11 @@ include_once dirname(__DIR__) . '/partials/header.php';
             formData.append('ical_enabled', '<?php echo $dashboardData['settings']['ical_enabled'] ? '1' : '0'; ?>');
             formData.append('ical_weeks_future', '<?php echo htmlspecialchars($dashboardData['settings']['ical_weeks_future'] ?? '8'); ?>');
             formData.append('pdf_footer_text', <?php echo json_encode($dashboardData['settings']['pdf_footer_text'] ?? ''); ?>);
-
             try {
                 const response = await apiFetch('<?php echo htmlspecialchars(\App\Core\Utils::url('api/admin/settings/save')); ?>', {
                     method: 'POST',
                     body: formData
                 });
-
                 if (response.success) {
                     maintenanceStatus.textContent = isChecked ? 'Aktiviert' : 'Deaktiviert';
                     maintenanceStatus.style.color = isChecked ? 'var(--color-success)' : 'var(--color-text-muted)';
@@ -269,19 +241,13 @@ include_once dirname(__DIR__) . '/partials/header.php';
             }
         });
     }
-
-    // --- NEU: Cache leeren Button ---
     const clearCacheBtn = document.getElementById('clear-cache-btn');
     const cacheSpinner = document.getElementById('cache-clear-spinner');
-
     if (clearCacheBtn && cacheSpinner) {
-        // ... (Cache-Logik bleibt unverändert) ...
         clearCacheBtn.addEventListener('click', async () => {
             const csrfToken = clearCacheBtn.dataset.csrfToken;
-            
             clearCacheBtn.disabled = true;
             cacheSpinner.style.display = 'inline-block';
-
             try {
                 const response = await apiFetch('<?php echo htmlspecialchars(\App\Core\Utils::url('api/admin/cache/clear')); ?>', {
                     method: 'POST',
@@ -289,7 +255,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         'X-CSRF-TOKEN': csrfToken 
                     }
                 });
-
                 if (response.success) {
                     showToast(response.message, 'success');
                     const newToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
@@ -299,29 +264,21 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     }
                 }
             } catch (error) {
-                // Fehler
             } finally {
                 clearCacheBtn.disabled = false;
                 cacheSpinner.style.display = 'none';
             }
         });
     }
-
-    // --- KORRIGIERT: Drag-and-Drop für Widgets (mit Speicherung) ---
     const grid = document.getElementById('dashboard-widget-grid');
     let draggedItem = null;
     let placeholder = null;
     const WIDGET_ORDER_KEY = 'dashboardWidgetOrder';
-
-    /**
-     * Lädt und wendet die gespeicherte Widget-Reihenfolge an.
-     */
     function loadWidgetOrder() {
         const savedOrder = localStorage.getItem(WIDGET_ORDER_KEY);
         if (savedOrder && grid) {
             try {
                 const order = JSON.parse(savedOrder);
-                // Gehe durch die gespeicherte Reihenfolge und füge die Elemente nacheinander an
                 order.forEach(id => {
                     const widget = document.getElementById(id);
                     if (widget) {
@@ -334,63 +291,37 @@ include_once dirname(__DIR__) . '/partials/header.php';
             }
         }
     }
-
-    /**
-     * Speichert die aktuelle Widget-Reihenfolge im localStorage.
-     */
     function saveWidgetOrder() {
         if (!grid) return;
         const widgets = grid.querySelectorAll('.dashboard-widget');
         const order = Array.from(widgets).map(widget => widget.id);
         localStorage.setItem(WIDGET_ORDER_KEY, JSON.stringify(order));
     }
-    
-    /**
-     * Erstellt den visuellen Platzhalter.
-     */
     function createPlaceholder() {
         if (!placeholder) {
             placeholder = document.createElement('div');
             placeholder.className = 'widget-placeholder';
             if (draggedItem) {
-                // Setze Höhe UND Breite des Platzhalters auf die des gezogenen Elements
                 const rect = draggedItem.getBoundingClientRect();
                 placeholder.style.height = `${rect.height}px`;
-                // Wichtig: Auch die Breite setzen, um das Grid-Layout zu stabilisieren
                 placeholder.style.width = `${rect.width}px`; 
             }
         }
         return placeholder;
     }
-    
-    /**
-     * Entfernt den Platzhalter aus dem DOM.
-     */
     function removePlaceholder() {
         if (placeholder && placeholder.parentNode) {
             placeholder.parentNode.removeChild(placeholder);
         }
         placeholder = null;
     }
-
-    /**
-     * Findet das Element, vor dem das gezogene Element eingefügt werden soll.
-     * Diese Logik funktioniert für Grids, die sich horizontal und vertikal füllen.
-     */
     function getDragAfterElement(container, clientX, clientY) {
         const draggableElements = [...container.querySelectorAll('.dashboard-widget:not(.dragging)')];
-
         return draggableElements.reduce((closest, child) => {
             const box = child.getBoundingClientRect();
-            
-            // Berechne die Distanz zum Mittelpunkt des Elements
             const midX = box.left + box.width / 2;
             const midY = box.top + box.height / 2;
-            
-            // Wir gewichten die Y-Distanz stärker, aber berücksichtigen X
-            // Einfachere Logik: Finde das Element, dessen *Mitte* der Maus am nächsten ist.
             const distance = Math.sqrt(Math.pow(clientX - midX, 2) + Math.pow(clientY - midY, 2));
-
             if (distance < (closest.distance || Number.POSITIVE_INFINITY)) {
                 return { distance: distance, element: child };
             } else {
@@ -398,30 +329,21 @@ include_once dirname(__DIR__) . '/partials/header.php';
             }
         }, { distance: Number.POSITIVE_INFINITY, element: null }).element;
     }
-
-
     if (grid) {
-        // 1. Gespeicherte Reihenfolge beim Laden anwenden
         loadWidgetOrder();
-
         grid.addEventListener('dragstart', (e) => {
-            // Nur Widgets sollen ziehbar sein
             if (e.target.classList.contains('dashboard-widget')) {
                 draggedItem = e.target;
-                
                 setTimeout(() => {
                     if (draggedItem) {
                         draggedItem.classList.add('dragging');
                     }
                 }, 0);
-                
-                // Erstelle Platzhalter sofort, um die Größe zu fixieren
                 placeholder = createPlaceholder();
             } else {
                 e.preventDefault();
             }
         });
-
         grid.addEventListener('dragend', (e) => {
             if (draggedItem) {
                 draggedItem.classList.remove('dragging');
@@ -429,57 +351,35 @@ include_once dirname(__DIR__) . '/partials/header.php';
             draggedItem = null;
             removePlaceholder();
         });
-
         grid.addEventListener('dragover', (e) => {
             e.preventDefault(); // Notwendig, um 'drop' zu erlauben
             if (!draggedItem) return;
-
-            // Finde das Element, über dem wir schweben
             const target = e.target.closest('.dashboard-widget');
-            
             if (target && target !== draggedItem && target !== placeholder) {
                 const rect = target.getBoundingClientRect();
-                
-                // KORRIGIERTE LOGIK: Prüfe X- und Y-Position
-                // Bessere Logik: Finde das *nächste* Element, nicht nur das, über dem wir schweben
                 const closestElement = getDragAfterElement(grid, e.clientX, e.clientY);
-
                 if (closestElement) {
                      const closestRect = closestElement.getBoundingClientRect();
-                     // Entscheide basierend auf der Mausposition relativ zur Mitte des *nächsten* Elements
                      const midX = closestRect.left + closestRect.width / 2;
                      const midY = closestRect.top + closestRect.height / 2;
-
-                     // Priorisiere die Grid-Reihenfolge (links/rechts VOR oben/unten)
                     if (e.clientY >= closestRect.top && e.clientY <= closestRect.bottom) {
-                        // Wir sind in derselben "visuellen" Zeile
                          if (e.clientX < midX) {
                             grid.insertBefore(placeholder, closestElement);
                          } else {
                             grid.insertBefore(placeholder, closestElement.nextSibling);
                          }
                     } else if (e.clientY < midY) {
-                         // Wir sind über dem Element
                          grid.insertBefore(placeholder, closestElement);
                     } else {
-                        // Wir sind unter dem Element
                          grid.insertBefore(placeholder, closestElement.nextSibling);
                     }
-
                 } else if (!grid.contains(placeholder)) {
-                    // Wenn kein Element gefunden wird (Grid ist leer oder wir sind am Ende),
-                    // hänge den Platzhalter am Ende an.
                     grid.appendChild(placeholder);
                 }
-
             } else if (!target && grid === e.target && !grid.contains(placeholder)) {
-                 // Wenn wir über dem Grid-Container selbst (einer Lücke) schweben,
-                 // füge den Platzhalter am Ende an
                  grid.appendChild(placeholder);
             }
         });
-
-
         grid.addEventListener('drop', (e) => {
             e.preventDefault();
             if (!draggedItem || !placeholder || !placeholder.parentNode) {
@@ -488,25 +388,16 @@ include_once dirname(__DIR__) . '/partials/header.php';
                 draggedItem = null;
                 return;
             }
-
-            // Ersetze den Platzhalter durch das gezogene Element
             placeholder.parentNode.insertBefore(draggedItem, placeholder);
-            
-            // Aufräumen
             removePlaceholder();
             if (draggedItem) {
                 draggedItem.classList.remove('dragging');
             }
             draggedItem = null;
-
-            // NEU: Anordnung speichern
             saveWidgetOrder();
         });
     }
-
 </script>
-
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

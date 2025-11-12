@@ -1,12 +1,10 @@
 </main> <?php // Closes <main class="page-wrapper"> from header.php ?>
-
     <footer class="site-footer">
         <div class="footer-content container">
             <div class="copyright">
                  &copy; <?php echo date('Y'); ?> <?php echo htmlspecialchars(\App\Core\Utils::getSettings()['site_title']); ?>
                  - Ein Produkt des PMI.
             </div>
-
             <div class="imprint">
                 <button id="imprint-toggle" class="imprint-toggle">Impressum &amp; Rechtliches</button>
                 <div id="imprint-details" class="imprint-details">
@@ -49,8 +47,6 @@
             </div>
         </div>
     </footer>
-
     <script type="module" src="<?php echo rtrim($config['base_url'], '/'); ?>/assets/js/main.js"></script>
-
 </body>
 </html>

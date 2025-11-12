@@ -1,0 +1,85 @@
+.dashboard-widget {
+    background-color: var(--color-surface);
+    border-radius: 10px;
+    padding: 20px 25px; 
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+    border: 1px solid var(--color-border);
+    display: flex;
+    flex-direction: column;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+    position: relative; 
+    user-select: none; 
+}
+.dark-mode .dashboard-widget {
+    background-color: var(--color-surface-alt);
+}
+.dashboard-widget[draggable="true"] { 
+    cursor: move; 
+}
+.dashboard-widget.dragging { 
+    opacity: 0.5; 
+    transform: scale(0.98); 
+    box-shadow: 0 10px 30px rgba(0,0,0,0.2); 
+}
+.widget-placeholder {
+    background: rgba(57, 0, 153, 0.05); 
+    border: 2px dashed var(--color-primary);
+    border-radius: 10px; 
+    margin: 0; 
+    padding: 0; 
+    transition: height 0.1s ease-out; 
+    box-sizing: border-box;
+}
+.dark-mode .widget-placeholder { 
+    background: rgba(169, 114, 255, 0.1); 
+    border-color: var(--color-primary); 
+}
+.dashboard-widget h3, 
+.dashboard-widget p, 
+.dashboard-widget .stat-list, 
+.dashboard-widget .system-info-list, 
+.dashboard-widget .activity-list, 
+.dashboard-widget .btn, 
+.dashboard-widget .toggle-switch, 
+.dashboard-widget a {
+    cursor: auto; 
+    user-select: text;
+}
+.dashboard-widget .slider { 
+    cursor: pointer; 
+}
+.dashboard-widget h3 {
+    font-size: 1.2rem; 
+    margin-top: 0; 
+    margin-bottom: 20px; 
+    padding-bottom: 15px;
+    border-bottom: 1px solid var(--color-border); 
+    display: flex; 
+    align-items: center; 
+    gap: 8px;
+}
+.widget-link { 
+    display: block; 
+    text-align: right; 
+    font-size: 0.85rem; 
+    font-weight: 600; 
+    margin-top: auto; 
+    color: var(--color-primary); 
+}
+.widget-link:hover { 
+    text-decoration: underline; 
+}
+.widget-action-footer { 
+    margin-top: auto; 
+    padding-top: 15px; 
+    border-top: 1px solid var(--color-border); 
+    display: flex; 
+    align-items: center; 
+    gap: 15px; 
+}
+.widget-action-footer .btn-small { 
+    padding: 6px 12px; 
+    font-size: 0.85rem; 
+    width: auto; 
+    margin-bottom: 0; 
+}

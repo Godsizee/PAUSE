@@ -1,15 +1,11 @@
 <?php
-// pages/admin/audit_logs.php
 include_once dirname(__DIR__) . '/partials/header.php';
-// $availableUsers und $availableActions werden vom Controller übergeben
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">Audit Log (Aktionsprotokoll)</h1>
     <div class="dashboard-grid">
         <?php include_once __DIR__ . '/partials/_sidebar.php'; ?>
         <main class="dashboard-content" id="audit-log-management">
-            
             <!-- Sektion für Filter -->
             <div class.="dashboard-section" id="filter-section">
                  <div class="form-container" style="background-color: var(--color-surface-alt); margin-bottom: 20px;">
@@ -57,7 +53,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     </form>
                  </div>
             </div>
-
             <!-- Sektion für die Log-Tabelle -->
             <div class="dashboard-section active" id="log-list-section">
                 <div class="section-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -95,7 +90,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

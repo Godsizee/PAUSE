@@ -1,0 +1,72 @@
+.tab-navigation {
+    display: flex;
+    flex-wrap: wrap; 
+    background-color: var(--color-surface-alt);
+    padding: 0 10px;
+    border-bottom: 1px solid var(--color-border);
+}
+.dark-mode .tab-navigation {
+    background-color: var(--color-surface-alt);
+}
+.tab-button {
+    padding: 15px 20px;
+    font-weight: 600;
+    font-size: 0.95rem;
+    border: none;
+    border-bottom: 3px solid transparent; 
+    background-color: transparent;
+    cursor: pointer;
+    color: var(--color-text-muted);
+    transition: all 0.2s ease-in-out;
+    position: relative;
+    top: 1px; 
+    white-space: nowrap;
+}
+.dark-mode .tab-button {
+    color: var(--color-text-muted);
+}
+.tab-button:hover {
+    color: var(--color-primary);
+    background-color: var(--color-surface);
+}
+.dark-mode .tab-button:hover {
+    color: #fff;
+    background-color: var(--color-surface);
+}
+.tab-button.active {
+    color: var(--color-primary);
+    font-weight: 700;
+    border-bottom-color: var(--color-primary); 
+    background-color: var(--color-surface);
+}
+.dark-mode .tab-button.active {
+    color: #fff;
+    border-bottom-color: var(--color-primary);
+    background-color: var(--color-surface);
+}
+.tab-content {
+    background-color: var(--color-surface);
+}
+.tab-content .dashboard-section {
+    display: none; 
+    padding: 25px 30px;
+    animation: fadeIn 0.4s ease;
+}
+.tab-content .dashboard-section.active {
+    display: block; 
+}
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+@media (max-width: 768px) {
+    .tab-navigation {
+        overflow-x: auto;
+        flex-wrap: nowrap;
+        justify-content: flex-start;
+    }
+    .tab-button {
+        font-size: 0.85rem;
+        padding: 12px 10px;
+    }
+}

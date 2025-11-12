@@ -1,0 +1,55 @@
+.settings-section.form-container {
+    background-color: var(--color-surface);
+    border: 1px solid var(--color-border);
+    padding: 25px;
+    margin-top: 0; 
+    margin-bottom: 25px;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.04);
+}
+.dark-mode .settings-section.form-container {
+    background-color: var(--color-surface-alt);
+    border-color: var(--color-border);
+}
+#settings-management .form-container:not(.settings-section) {
+    padding: 0; margin: 0; background: transparent; border: none; box-shadow: none;
+}
+.setting-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 30px;
+    padding: 25px 0; border-bottom: 1px solid var(--color-border); align-items: center;
+}
+.setting-row:first-of-type { padding-top: 10px; }
+.setting-row:last-of-type { border-bottom: none; padding-bottom: 10px; }
+.setting-info label { font-size: 1.1rem; font-weight: 600; color: var(--color-text); }
+.setting-info p { font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 0; line-height: 1.5; }
+.setting-control { display: flex; align-items: center; gap: 15px; }
+.setting-control input[type="text"],
+.setting-control input[type="number"],
+.setting-control textarea,
+.setting-control select {
+    max-width: 450px; margin-bottom: 0; width: 100%;
+}
+.setting-control.file-upload-control { flex-direction: column; align-items: flex-start; gap: 10px; }
+.setting-control input[type="file"] { width: 100%; max-width: 450px; }
+.file-preview { font-size: 0.9rem; color: var(--color-text-muted); display: flex; align-items: center; gap: 10px; min-height: 30px; }
+.file-preview img.logo-preview { max-height: 40px; width: auto; border: 1px solid var(--color-border); border-radius: 4px; background: #f8f9fa; }
+.dark-mode .file-preview img.logo-preview { background: #30363d; }
+.file-preview img.favicon-preview { height: 24px; width: 24px; border: 1px solid var(--color-border); border-radius: 4px; background: #f8f9fa; }
+.dark-mode .file-preview img.favicon-preview { background: #30363d; }
+.remove-file-label { font-size: 0.8rem; color: var(--color-danger); cursor: pointer; font-weight: 600; }
+.remove-file-label input { margin-right: 4px; }
+.toggle-switch { position: relative; display: inline-block; width: 60px; height: 34px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background-color: #ccc; transition: .4s; border-radius: 34px; }
+.dark-mode .slider { background-color: #30363d; }
+.slider:before { position: absolute; content: ""; height: 26px; width: 26px; left: 4px; bottom: 4px; background-color: white; transition: .4s; border-radius: 50%; }
+input:checked + .slider { background-color: var(--color-success); }
+input:checked + .slider:before { transform: translateX(26px); }
+.toggle-status { font-weight: 600; font-size: 0.9rem; color: var(--color-text-muted); transition: color 0.4s; }
+input:checked ~ .toggle-status { color: var(--color-success); }
+@media (max-width: 768px) {
+    .setting-row { grid-template-columns: 1fr; gap: 15px; }
+    .setting-control input[type="text"],
+    .setting-control input[type="number"],
+    .setting-control textarea,
+    .setting-control select { max-width: 100%; }
+}

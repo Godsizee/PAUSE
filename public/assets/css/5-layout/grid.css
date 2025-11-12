@@ -1,0 +1,48 @@
+/* public/assets/css/5-layout/grid.css */
+.dashboard-grid {
+    display: grid;
+    grid-template-columns: minmax(220px, 20%) 1fr;
+    gap: 30px;
+    align-items: start;
+}
+
+.dashboard-content {
+    background-color: var(--color-surface);
+    border-radius: 12px;
+    padding: 0;
+    box-shadow: 0 5px 25px rgba(0, 0, 0, 0.05);
+    overflow: hidden; /* Behält border-radius für innere Elemente (Tabs) */
+    border: none;
+    min-width: 0; 
+}
+
+.dashboard-widget-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 25px;
+    margin-top: 15px;
+    padding: 10px;
+}
+
+.health-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+    gap: 25px;
+    padding: 10px;
+}
+
+
+@media (max-width: 992px) {
+    .dashboard-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 768px) {
+    .dashboard-widget-grid {
+        grid-template-columns: 1fr;
+    }
+    .health-grid {
+        grid-template-columns: 1fr;
+    }
+}

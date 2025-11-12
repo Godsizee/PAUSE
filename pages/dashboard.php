@@ -1,14 +1,7 @@
 <?php
-// pages/dashboard.php
-// KORRIGIERT: Alle Referenzen zum "Schwarzen Brett" (Tabs UND Inhalt)
-// wurden aus dem 'lehrer'-Block entfernt.
-
 include_once __DIR__ . '/partials/header.php';
-// $today, $dayOfWeekName, $dateFormatted, $icalSubscriptionUrl werden vom Controller übergeben
-// $settings wird automatisch vom header.php geladen
 $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
 ?>
-
 <div class="page-wrapper dashboard-wrapper">
     <h1 class="main-title">Mein Dashboard</h1>
 
@@ -16,29 +9,27 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
         <button class="tab-button active" data-target="section-my-day">🗓️ Mein Tag</button>
         <button class="tab-button" data-target="section-weekly-plan">📅 Wochenplan</button>
         <button class="tab-button" data-target="section-announcements">📢 Ankündigungen</button>
-        
+
         <?php // NEU: Prüfe, ob das Community Board global aktiviert ist ?>
         <?php if ($role === 'schueler' && $settings['community_board_enabled']): ?>
             <button class="tab-button" data-target="section-community-board">📰 Schwarzes Brett</button>
             <button class="tab-button" data-target="section-my-posts">✍️ Deine Beiträge</button>
         <?php endif; ?>
 
-        <?php if ($role === 'schueler' && !$settings['community_board_enabled']): // Nur wenn Schüler, aber Board deaktiviert ?>
-             <?php endif; ?>
+        <?php // NEU: Eigener Block für Sprechstunden (unabhängig vom Community Board) ?>
+        <?php if ($role === 'schueler'): ?>
+            <button class="tab-button" data-target="section-book-appointment">🗣️ Sprechstunde buchen</button>
+        <?php endif; ?>
 
         <?php if ($role === 'lehrer'): ?>
             <button class="tab-button" data-target="section-attendance">✅ Anwesenheit</button>
             <button class="tab-button" data-target="section-events">📚 Aufgaben/Klausuren</button>
             <button class="tab-button" data-target="section-office-hours">🗣️ Sprechzeiten</button>
             <button class="tab-button" data-target="section-colleague-search">🧑‍🤝‍🧑 Kollegensuche</button>
-            
-            <?php // KORREKTUR: Der 'Schwarzes Brett'-Tab für Lehrer wurde hier entfernt (war Zeile 26-28). ?>
-            
         <?php endif; ?>
     </nav>
 
     <div class="tab-content">
-
         <div class="dashboard-section active" id="section-my-day">
             <h2 class="section-title-hidden">Mein Tag <small>(<?php echo $dayOfWeekName . ', ' . $dateFormatted; ?>)</small></h2>
             <div id="today-schedule-container" class="today-schedule-container">
@@ -66,7 +57,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                         </div>
                     </div>
                 </div>
-
                 <div id="plan-header-info" class="plan-header-info"></div>
                 <div class="timetable-container" id="timetable-container">
                     <div class="loading-spinner"></div>
@@ -99,7 +89,7 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
             <div class="dashboard-section" id="section-community-board">
                 <h4>Digitales Schwarzes Brett</h4>
                 <p class="form-hint" style="margin-bottom: 20px;">Informeller Feed für Fundsachen, AGs, Nachhilfe, etc. Beiträge von Schülern werden vor der Veröffentlichung geprüft.</p>
-
+                
                 <form id="community-post-form" class="form-container" style="background-color: var(--color-surface-alt); padding: 15px; margin-bottom: 25px;">
                     <?php \App\Core\Security::csrfInput(); ?>
                     <h5>Neuen Beitrag erstellen</h5>
@@ -126,15 +116,59 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
             <div class="dashboard-section" id="section-my-posts">
                 <h4>Deine Beiträge</h4>
                 <p class="form-hint" style="margin-bottom: 20px;">Hier siehst du den Status deiner eingereichten Beiträge und kannst sie bearbeiten. Bearbeitete Beiträge werden erneut zur Moderation vorgelegt.</p>
-                
                 <div id="my-posts-list" class="posts-list-container my-posts-container" style="max-height: 60vh; overflow-y: auto;">
                     <div class="loading-spinner"></div>
                 </div>
             </div>
+        <?php endif; ?>
+        
+        <?php // Gesamter Block für Schüler-Sprechstundenbuchung ?>
+        <?php if ($role === 'schueler'): ?>
+        <div class="dashboard-section" id="section-book-appointment">
+            <div class="cockpit-feature" id="appointment-booking-widget">
+                <h4>Sprechstunde buchen</h4>
+                <p class="form-hint" style="margin-bottom: 20px; margin-top: 0;">Suche nach einem Lehrer, um verfügbare Termine zu sehen.</p>
+                
+                <form id="appointment-booking-form" class="form-container" style="background-color: var(--color-surface-alt); padding: 15px;">
+                    <?php \App\Core\Security::csrfInput(); ?>
+                    <input type="hidden" id="selected-teacher-id">
 
-            <?php endif; ?>
+                    <div class="form-group" style="margin-bottom: 15px; position: relative;">
+                        <label for="teacher-search-input">1. Lehrer suchen*</label>
+                        <input type="text" id="teacher-search-input" placeholder="Name oder Kürzel..." autocomplete="off">
+                        <div class="search-results-dropdown" id="teacher-search-results">
+                            <!-- Ergebnisse werden per JS eingefügt -->
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label for="appointment-date-picker">2. Datum auswählen*</label>
+                        <input type="text" id="appointment-date-picker" name="appointment_date" placeholder="Bitte zuerst einen Lehrer auswählen." readonly>
+                        <small class="form-hint">Nur Tage mit freien Terminen sind wählbar.</small>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 15px;">
+                        <label>3. Verfügbaren Slot auswählen*</label>
+                        <div class="available-slots-container" id="available-slots-container">
+                            <small class="form-hint">Bitte Lehrer und Datum auswählen.</small>
+                        </div>
+                    </div>
 
+                    <div class="form-group" id="appointment-notes-container" style="display: none; margin-bottom: 15px;">
+                        <label for="appointment-notes">4. Anmerkung für den Lehrer (optional)</label>
+                        <textarea id="appointment-notes" name="notes" rows="2" placeholder="z.B. Thema: Notenbesprechung, Projekt..."></textarea>
+                    </div>
 
+                    <div class="form-actions" style="margin-top: 0; justify-content: flex-end;">
+                        <button type="submit" class="btn btn-primary btn-small" id="book-appointment-btn" style="width: auto;" disabled>Termin buchen</button>
+                        <span id="appointment-book-spinner" class="loading-spinner small" style="display: none; margin-left: 10px;"></span>
+                    </div>
+                </form>
+            </div>
+        </div>
+        <?php endif; ?>
+
+        <?php // Cockpit-Tabs für Lehrer ?>
         <?php if ($role === 'lehrer'): ?>
             <div id="teacher-cockpit" style="display: contents;">
                 <div class="dashboard-section" id="section-attendance">
@@ -201,7 +235,7 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                                 <span id="event-save-spinner" class="loading-spinner small" style="display: none;"></span>
                             </div>
                         </form>
-                        
+
                         <h5>Meine Einträge (Nächste 14 Tage):</h5>
                         <div class="event-list-container" id="teacher-event-list">
                             <div class="loading-spinner small"></div>
@@ -211,50 +245,85 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
 
                 <div class="dashboard-section" id="section-office-hours">
                     <div class="cockpit-feature" id="office-hours-feature">
-                        <h4>Sprechstunden verwalten</h4>
-                        <p class="form-hint" style="margin-bottom: 15px; margin-top: 0;">Definieren Sie hier Ihre wöchentlich wiederkehrenden Zeitfenster, die Schüler buchen können.</p>
-                        <form id="office-hours-form" class="form-container" style="background-color: var(--color-surface-alt); padding: 15px; margin-bottom: 20px;">
-                            <?php \App\Core\Security::csrfInput(); ?>
-                            <div class="form-grid-col-3">
-                                <div class="form-group">
-                                    <label for="office-day">Wochentag*</label>
-                                    <select name="day_of_week" id="office-day" required>
-                                        <option value="1">Montag</option>
-                                        <option value="2">Dienstag</option>
-                                        <option value="3">Mittwoch</option>
-                                        <option value="4">Donnerstag</option>
-                                        <option value="5">Freitag</option>
-                                    </select>
-                                </div>
-                                <div class="form-group">
-                                    <label for="office-start-time">Von*</label>
-                                    <input type="time" name="start_time" id="office-start-time" step="900" required>
-                                </div>
-                                <div class="form-group">
-                                    <label for="office-end-time">Bis*</label>
-                                    <input type="time" name="end_time" id="office-end-time" step="900" required>
+                        <!-- NEUE TAB-NAVIGATION (Inner-Tabs) -->
+                        <nav class="tab-navigation inner-tabs">
+                            <button class="tab-button active" data-target="office-hours-manage-view">
+                                🗓️ Fenster verwalten
+                            </button>
+                            <button class="tab-button" data-target="office-hours-booked-view">
+                                ✔️ Gebuchte Termine <span id="booked-appointments-count">(0)</span>
+                            </button>
+                        </nav>
+                        
+                        <!-- NEUER TAB-CONTENT (Inner-Tabs) -->
+                        <div class="tab-content inner-tab-content">
+                            
+                            <!-- Ansicht 1: Fenster verwalten (Bestehendes Markup) -->
+                            <div class="dashboard-section active" id="office-hours-manage-view" style="padding: 20px 0 0 0;">
+                                <h4>Sprechstunden verwalten</h4>
+                                <p class="form-hint" style="margin-bottom: 15px; margin-top: 0;">Definieren Sie hier Ihre wöchentlich wiederkehrenden Zeitfenster, die Schüler buchen können.</p>
+                                
+                                <form id="office-hours-form" class="form-container office-hours-form-grid" style="background-color: var(--color-surface-alt); padding: 15px; margin-bottom: 20px;">
+                                    <?php \App\Core\Security::csrfInput(); ?>
+                                    <div class="form-group">
+                                        <label for="office-day">Wochentag*</label>
+                                        <select name="day_of_week" id="office-day" required>
+                                            <option value="1">Montag</option>
+                                            <option value="2">Dienstag</option>
+                                            <option value="3">Mittwoch</option>
+                                            <option value="4">Donnerstag</option>
+                                            <option value="5">Freitag</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="office-start-time">Von*</label>
+                                        <input type="time" name="start_time" id="office-start-time" step="900" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="office-end-time">Bis*</label>
+                                        <input type="time" name="end_time" id="office-end-time" step="900" required>
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="office-location">Raum/Ort*</label>
+                                        <input type="text" name="location" id="office-location" required placeholder="z.B. Raum 201, Online">
+                                    </div>
+                                    <div class="form-group">
+                                        <label for="office-slot-duration">Slot (Min)*</label>
+                                        <input type="number" name="slot_duration" id="office-slot-duration" value="15" min="5" max="60" step="5" required>
+                                    </div>
+                                    <div class="form-actions" style="margin-top: 0;">
+                                        <button type="submit" class="btn btn-primary btn-small" id="save-office-hours-btn" style="width: 100%;">
+                                            Hinzufügen
+                                        </button>
+                                        <span id="office-hours-save-spinner" class="loading-spinner small" style="display: none;"></span>
+                                    </div>
+                                </form>
+
+                                <h5>Meine Sprechzeitenfenster:</h5>
+                                <div class="office-hours-list-container" id="teacher-office-hours-list">
+                                    <div class="loading-spinner small"></div>
                                 </div>
                             </div>
-                            <div class="form-group" style="max-width: 150px;">
-                                <label for="office-slot-duration">Slot-Dauer (Min)*</label>
-                                <input type="number" name="slot_duration" id="office-slot-duration" value="15" min="5" max="60" step="5" required>
+
+                            <!-- Ansicht 2: Gebuchte Termine (Neu) -->
+                            <div class="dashboard-section" id="office-hours-booked-view" style="padding: 20px 0 0 0;">
+                                <h4>Ihre gebuchten Sprechstunden</h4>
+                                <!-- HINWEISTEXT GEÄNDERT -->
+                                <p class="form-hint" style="margin-bottom: 15px; margin-top: 0;">Liste aller zukünftigen und heutigen gebuchten Termine. Vergangene Termine werden ausgeblendet.</p>
+                                <div class="booked-appointments-list-container" id="booked-appointments-list-container">
+                                    <div class="loading-spinner"></div>
+                                    <!-- Inhalt wird per JS geladen -->
+                                </div>
                             </div>
-                            <div class="form-actions" style="margin-top: 0;">
-                                <button type="submit" class="btn btn-primary btn-small" id="save-office-hours-btn" style="width: auto;">Fenster hinzufügen</button>
-                                <span id="office-hours-save-spinner" class="loading-spinner small" style="display: none;"></span>
-                            </div>
-                        </form>
-                        <h5>Meine Sprechzeitenfenster:</h5>
-                        <div class="office-hours-list-container" id="teacher-office-hours-list">
-                            <div class="loading-spinner small"></div>
-                        </div>
+                            
+                        </div> <!-- Ende inner-tab-content -->
                     </div>
                 </div>
 
                 <div class="dashboard-section" id="section-colleague-search">
                     <div class="cockpit-feature" id="find-colleague-feature">
                         <h4>Wo ist...? (Kollegensuche)</h4>
-                        <div class="form-group" style="margin-bottom: 10px;">
+                        <div class="form-group" style="margin-bottom: 10px; position: relative;">
                             <label for="colleague-search-input">Kollege/Kollegin suchen:</label>
                             <input type="text" id="colleague-search-input" placeholder="Name oder Kürzel suchen...">
                             <div class="search-results-dropdown" id="colleague-search-results">
@@ -266,15 +335,11 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                         </div>
                     </div>
                 </div>
-                
-                <?php // KORREKTUR: Der 'Schwarzes Brett'-INHALT für Lehrer wurde hier entfernt (war Zeile 247-279). ?>
-                
             </div> <?php // End #teacher-cockpit ?>
         <?php endif; ?>
-        
+
     </div> <?php // End .tab-content ?>
 </div> <?php // End .page-wrapper ?>
-
 
 <?php // --- Modal für Stundenplan-Details (GILT FÜR ALLE) --- ?>
 <div id="plan-detail-modal" class="modal-overlay">
@@ -316,19 +381,18 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                 <span id="detail-comment" class="detail-value"></span>
             </div>
             
-            <?php // --- NEU: Platzhalter für Notizen (nur für Schüler) --- ?>
+            <?php // --- Platzhalter für Notizen (nur für Schüler) --- ?>
             <?php if ($role === 'schueler'): ?>
-            <div class_alias="detail-row detail-notes" id="detail-notes-row" style="display: none; flex-direction: column; align-items: stretch; border-bottom: none; padding-bottom: 0;">
+            <div class="detail-row detail-notes" id="detail-notes-row" style="display: none; flex-direction: column; align-items: stretch; border-bottom: none; padding-bottom: 0;">
                 <label for="detail-notes-input" class="detail-label" style="margin-bottom: 8px;">Meine private Notiz:</label>
                 <textarea id="detail-notes-input" rows="3" placeholder="Notiz hinzufügen (z.B. Hausaufgaben, Material)..."></textarea>
                 <span id="note-save-spinner" class="loading-spinner small" style="display: none; margin-top: 5px;"></span>
             </div>
             <?php endif; ?>
-            
         </div>
         <div class="modal-actions" style="margin-top: 20px;">
             <button type="button" class="btn btn-secondary" id="plan-detail-close-btn">Schließen</button>
-            <?php // --- NEU: Notiz-Speichern-Button (nur für Schüler) --- ?>
+            <?php // --- Notiz-Speichern-Button (nur für Schüler) --- ?>
             <?php if ($role === 'schueler'): ?>
             <button type="button" class="btn btn-primary" id="plan-detail-save-note-btn">Notiz speichern</button>
             <?php endif; ?>
@@ -337,8 +401,7 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
 </div>
 <?php // --- ENDE Modal --- ?>
 
-
-<?php // --- NEU: Modal für "Meine Beiträge" (Bearbeiten) --- ?>
+<?php // --- Modal für "Meine Beiträge" (Bearbeiten) --- ?>
 <?php if ($role === 'schueler' && $settings['community_board_enabled']): ?>
 <div id="my-post-edit-modal" class="modal-overlay">
     <div class="modal-box">
@@ -346,7 +409,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
         <h2 id="my-post-edit-title">Beitrag bearbeiten</h2>
         <form id="my-post-edit-form" class="form-container" style="padding: 0; border: none; background: none; box-shadow: none;">
             <input type="hidden" name="post_id" id="edit-post-id">
-            
             <div class="form-group" style="margin-bottom: 10px;">
                 <label for="edit-post-title">Titel*</label>
                 <input type="text" id="edit-post-title" name="title" required>
@@ -356,7 +418,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
                 <textarea id="edit-post-content" name="content" rows="6" required></textarea>
                 <small class="form-hint">Der Beitrag wird nach dem Speichern erneut zur Moderation vorgelegt.</small>
             </div>
-            
             <div class="modal-actions">
                 <button type="button" class="btn btn-secondary" id="my-post-edit-cancel-btn">Abbrechen</button>
                 <button type="submit" class="btn btn-primary" id="my-post-edit-save-btn">Speichern & Einreichen</button>
@@ -367,7 +428,6 @@ $role = $_SESSION['user_role'] ?? 'guest'; // Rolle holen
 </div>
 <?php endif; ?>
 <?php // --- ENDE Modal --- ?>
-
 
 <?php
 include_once __DIR__ . '/partials/footer.php';

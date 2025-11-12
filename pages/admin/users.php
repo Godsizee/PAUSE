@@ -1,14 +1,11 @@
 <?php
-// pages/admin/users.php
 include_once dirname(__DIR__) . '/partials/header.php';
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">Benutzerverwaltung</h1>
     <div class="dashboard-grid">
         <?php include_once __DIR__ . '/partials/_sidebar.php'; ?>
         <main class="dashboard-content" id="user-management">
-
             <div class="dashboard-section active" id="user-import-section">
                 <div class="section-header">
                     <h3>Benutzer-Massenimport (CSV)</h3>
@@ -36,7 +33,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     </div>
                 </div>
             </div>
-
             <div class="dashboard-section active" id="user-list-section">
                 <div class="section-header">
                     <h3>Alle Benutzer</h3>
@@ -64,7 +60,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         <form id="user-form" data-mode="create">
                             <?php \App\Core\Security::csrfInput(); // Add CSRF input field ?>
                             <input type="hidden" name="user_id" id="user_id">
-
                             <div class="form-grid-col-2">
                                 <div class="form-group">
                                     <label for="first_name">Vorname*</label>
@@ -75,7 +70,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                     <input type="text" name="last_name" id="last_name" required>
                                 </div>
                             </div>
-
                             <div class="form-group">
                                 <label for="username">Benutzername*</label>
                                 <input type="text" name="username" id="username" required>
@@ -93,15 +87,12 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 <label for="birth_date">Geburtsdatum</label>
                                 <input type="date" name="birth_date" id="birth_date">
                             </div>
-
                             <hr>
-
                             <div class="form-group">
                                 <label for="role">Rolle*</label>
                                 <select name="role" id="role" required>
                                 </select>
                             </div>
-
                             <div id="role-specific-fields">
                                 <div class="form-group" id="class-select-container" style="display: none;">
                                     <label for="class_id">Klasse</label>
@@ -121,7 +112,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                     <small class="form-hint">Wenn angehakt, kann dieser Schüler keine Beiträge sehen oder erstellen.</small>
                                 </div>
                             </div>
-
                             <div class="form-actions">
                                 <button type="button" class="btn btn-secondary" id="cancel-edit-user" style="display: none;">Abbrechen</button>
                                 <button type="submit" class="btn btn-primary">Speichern</button>
@@ -133,7 +123,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

@@ -1,0 +1,46 @@
+#announcement-form textarea {
+    min-height: 120px;
+    font-family: inherit;
+    font-size: 1rem;
+    padding: 10px 12px;
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    box-sizing: border-box;
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    width: 100%;
+}
+#announcement-form textarea:focus {
+    outline: none;
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 3px rgba(57, 0, 153, 0.15);
+}
+.target-group-fieldset {
+    border: 1px solid var(--color-border);
+    border-radius: 8px;
+    padding: 15px;
+    margin-bottom: 20px;
+}
+.target-group-fieldset legend {
+    padding: 0 10px;
+    font-weight: 600;
+}
+.checkbox-group {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 15px;
+}
+#current-attachment-info a {
+    color: var(--color-primary);
+    text-decoration: none;
+    font-weight: 600;
+}
+#current-attachment-info a:hover {
+    text-decoration: underline;
+}
+#current-attachment-info label {
+    font-weight: normal;
+    margin-left: 5px; 
+    cursor: pointer;
+}

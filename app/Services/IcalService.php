@@ -1,11 +1,9 @@
 <?php
-// app/Services/IcalService.php
-
 namespace App\Services;
-
 use App\Repositories\UserRepository;
 use App\Repositories\PlanRepository;
 use App\Repositories\AcademicEventRepository;
+use App\Repositories\AppointmentRepository; // NEU
 use App\Core\Utils;
 use PDO;
 use Exception;
@@ -13,18 +11,13 @@ use DateTime;
 use DateTimeImmutable;
 use DateTimeZone;
 
-/**
- * Service-Klasse zur Kapselung der Logik für die iCal-Feed-Generierung.
- * (Ausgelagert aus IcalController).
- */
 class IcalService
 {
     private UserRepository $userRepository;
     private PlanRepository $planRepository;
     private AcademicEventRepository $eventRepository;
+    private AppointmentRepository $appointmentRepository; // NEU
     private array $settings;
-
-    // Zeitdefinitionen (konsistent mit PdfController)
     private const PERIOD_TIMES = [
         1 => ['start' => '0800', 'end' => '0845'],
         2 => ['start' => '0855', 'end' => '0940'],
@@ -42,45 +35,37 @@ class IcalService
         UserRepository $userRepository,
         PlanRepository $planRepository,
         AcademicEventRepository $eventRepository,
+        AppointmentRepository $appointmentRepository, // NEU
         array $settings
     ) {
         $this->userRepository = $userRepository;
         $this->planRepository = $planRepository;
         $this->eventRepository = $eventRepository;
+        $this->appointmentRepository = $appointmentRepository; // NEU
         $this->settings = $settings;
     }
 
-    /**
-     * Hauptmethode zur Generierung des iCal-Feeds für einen Benutzer-Token.
-     *
-     * @param string $token Der eindeutige iCal-Token des Benutzers.
-     * @return string Der vollständige iCal-Feed als String.
-     * @throws Exception Wenn der Feed deaktiviert ist, der Token ungültig ist oder Daten fehlen.
-     */
     public function generateFeed(string $token): string
     {
-        // 1. Prüfen, ob iCal global aktiviert ist
         if (empty($this->settings['ical_enabled'])) {
             throw new Exception("Kalender-Feeds sind derzeit systemweit deaktiviert.", 503);
         }
 
-        // 2. Benutzer validieren
         $user = $this->userRepository->findByIcalToken($token);
         if (!$user) {
             throw new Exception("Ungültiger oder unbekannter Kalender-Feed-Token.", 404);
         }
 
-        // 3. Benutzer-Typ bestimmen
         $userRole = $user['role'];
+        $userId = (int)$user['user_id']; // NEU: user_id holen
         $classId = ($userRole === 'schueler' && !empty($user['class_id'])) ? (int)$user['class_id'] : null;
         $teacherId = ($userRole === 'lehrer' && !empty($user['teacher_id'])) ? (int)$user['teacher_id'] : null;
-        $teacherUserId = ($userRole === 'lehrer') ? (int)$user['user_id'] : null;
+        $teacherUserId = ($userRole === 'lehrer') ? (int)$user['user_id'] : null; // $teacherUserId ist $userId
 
         if (($userRole !== 'schueler' && $userRole !== 'lehrer') || ($userRole === 'schueler' && !$classId) || ($userRole === 'lehrer' && !$teacherId)) {
             throw new Exception("Kalender-Feed nur für gültige Schüler- oder Lehrerprofile verfügbar.", 403);
         }
 
-        // 4. Daten abrufen
         $timezone = new DateTimeZone('Europe/Berlin');
         $now = new DateTimeImmutable('now', $timezone);
         $currentWeekInfo = $this->getWeekYear($now);
@@ -88,7 +73,7 @@ class IcalService
         $currentWeek = $currentWeekInfo['week'];
 
         $allEventsData = [];
-        $rangeWeeksBefore = 1;
+        $rangeWeeksBefore = 1; 
         $rangeWeeksAfter = $this->settings['ical_weeks_future'];
 
         try {
@@ -100,49 +85,55 @@ class IcalService
 
                 $targetGroup = ($userRole === 'schueler') ? 'student' : 'teacher';
                 $academicEventsForWeek = [];
+                $appointmentsForWeek = []; // NEU
+                
+                // Datumsbereich für Abfragen (Mo-So der Zielwoche)
+                [$startDate, $endDate] = $this->getWeekDateRange($targetYear, $targetWeek); 
 
                 if ($this->planRepository->isWeekPublishedFor($targetGroup, $targetYear, $targetWeek)) {
                     $timetable = [];
                     $substitutions = [];
-                    if ($classId) {
+                    
+                    if ($classId) { // Schüler
                         $timetable = $this->planRepository->getPublishedTimetableForClass($classId, $targetYear, $targetWeek);
                         $substitutions = $this->planRepository->getPublishedSubstitutionsForClassWeek($classId, $targetYear, $targetWeek);
                         $academicEventsForWeek = $this->eventRepository->getEventsForClassByWeek($classId, $targetYear, $targetWeek);
-                    } elseif ($teacherId && $teacherUserId) {
+                        // NEU: Termine für Schüler abrufen
+                        $appointmentsForWeek = $this->appointmentRepository->getAppointmentsForStudent($userId, $startDate, $endDate); 
+                    } elseif ($teacherId && $teacherUserId) { // Lehrer
                         $timetable = $this->planRepository->getPublishedTimetableForTeacher($teacherId, $targetYear, $targetWeek);
                         $substitutions = $this->planRepository->getPublishedSubstitutionsForTeacherWeek($teacherId, $targetYear, $targetWeek);
-                        [$startDate, $endDate] = $this->getWeekDateRange($targetYear, $targetWeek);
                         $academicEventsForWeek = $this->eventRepository->getEventsByTeacherForDateRange($teacherUserId, $startDate, $endDate);
+                        // NEU: Termine für Lehrer abrufen
+                        $appointmentsForWeek = $this->appointmentRepository->getAppointmentsForTeacher($userId, $startDate, $endDate); 
                     }
-
+                    
                     $this->processWeekData($allEventsData, $timetable, $substitutions, $targetYear, $targetWeek, $timezone, $userRole);
                     $this->processAcademicEvents($allEventsData, $academicEventsForWeek, $timezone);
+                    $this->processAppointments($allEventsData, $appointmentsForWeek, $timezone, $userRole); // NEU
                 }
-            } // End week loop
+            } 
         } catch (Exception $e) {
             error_log("iCal feed generation error for token {$token}: " . $e->getMessage());
             throw new Exception("Fehler beim Abrufen der Kalenderdaten.", 500);
         }
 
-        // 5. Als iCalendar formatieren
         return $this->formatAsIcs($allEventsData, $user);
     }
 
-    // --- Private Hilfsmethoden (aus IcalController übernommen) ---
-
     private function getWeekYear(DateTimeImmutable $date): array
     {
-        $year = (int)$date->format('o'); // ISO-8601 year
-        $week = (int)$date->format('W'); // ISO-8601 week number
+        $year = (int)$date->format('o'); 
+        $week = (int)$date->format('W'); 
         return ['week' => $week, 'year' => $year];
     }
 
     private function getWeekDateRange(int $year, int $week): array
     {
         $dto = new DateTime();
-        $dto->setISODate($year, $week, 1); // Montag
+        $dto->setISODate($year, $week, 1); 
         $startDate = $dto->format('Y-m-d');
-        $dto->setISODate($year, $week, 7); // Sonntag
+        $dto->setISODate($year, $week, 7); // Bis Sonntag
         $endDate = $dto->format('Y-m-d');
         return [$startDate, $endDate];
     }
@@ -162,10 +153,10 @@ class IcalService
             $substitutionMap[$key] = $sub;
         }
 
-        // --- Vertretungen zuerst verarbeiten ---
+        // Vertretungen zuerst verarbeiten
         foreach ($substitutions as $sub) {
             $subKey = $sub['date'] . '-' . $sub['period_number'];
-            if (isset($processedRegularSlots[$subKey])) continue;
+            if (isset($processedRegularSlots[$subKey])) continue; // Bereits als Teil eines Blocks verarbeitet
 
             $period = (int)$sub['period_number'];
             $times = self::PERIOD_TIMES[$period] ?? null;
@@ -177,36 +168,36 @@ class IcalService
                 error_log("Invalid date format in substitution: " . $sub['date']);
                 continue;
             }
-
+            
             $dtStart = $dateObj->setTime((int)substr($times['start'], 0, 2), (int)substr($times['start'], 2, 2));
             $dtEnd = $dateObj->setTime((int)substr($times['end'], 0, 2), (int)substr($times['end'], 2, 2));
 
-            // Auf mehrstündige Vertretungen prüfen
+            // Blockbildung für Vertretungen
             $span = 1;
             while (true) {
                 $nextPeriod = $period + $span;
                 $nextSubKey = $sub['date'] . '-' . $nextPeriod;
                 if (isset(self::PERIOD_TIMES[$nextPeriod]) && isset($substitutionMap[$nextSubKey])) {
                     $nextSub = $substitutionMap[$nextSubKey];
+                    // Prüfen, ob die nächste Stunde der gleiche Vertretungstyp ist
                     if ($nextSub['substitution_type'] === $sub['substitution_type'] &&
                         $nextSub['comment'] === $sub['comment'] &&
                         $nextSub['new_teacher_id'] === $sub['new_teacher_id'] &&
                         $nextSub['new_subject_id'] === $sub['new_subject_id'] &&
-                        $nextSub['new_room_id'] === $sub['new_room_id'])
+                        $nextSub['new_room_id'] === $sub['new_room_id']) 
                     {
-                         $nextTimes = self::PERIOD_TIMES[$nextPeriod];
-                         $dtEnd = $dateObj->setTime((int)substr($nextTimes['end'], 0, 2), (int)substr($nextTimes['end'], 2, 2));
-                         $processedRegularSlots[$nextSubKey] = true;
-                         $span++;
+                        $nextTimes = self::PERIOD_TIMES[$nextPeriod];
+                        $dtEnd = $dateObj->setTime((int)substr($nextTimes['end'], 0, 2), (int)substr($nextTimes['end'], 2, 2));
+                        $processedRegularSlots[$nextSubKey] = true;
+                        $span++;
                     } else {
-                         break;
+                        break;
                     }
                 } else {
-                     break;
+                    break;
                 }
             }
 
-            // Originaleintrag für Kontext finden
             $originalEntry = null;
             if ($sub['substitution_type'] !== 'Sonderevent') {
                  $dbDayNum = $dateObj->format('N');
@@ -224,7 +215,7 @@ class IcalService
                 case 'Entfall':
                     $summary = "ENTFALL: " . ($originalEntry['subject_shortcut'] ?? 'Unterricht');
                     $description .= "Ursprünglich: " . ($originalEntry['subject_shortcut'] ?? '?') . " bei " . ($originalEntry['teacher_shortcut'] ?? '?') . "\n";
-                    $location = '';
+                    $location = ''; 
                     $status = 'CANCELLED';
                     break;
                 case 'Raumänderung':
@@ -251,6 +242,7 @@ class IcalService
                     }
                     break;
             }
+
             if ($sub['comment'] && $sub['substitution_type'] !== 'Sonderevent') {
                 $description .= "Kommentar: " . $sub['comment'] . "\n";
             }
@@ -268,13 +260,14 @@ class IcalService
              $processedRegularSlots[$subKey] = true;
         }
 
-        // --- Reguläre Einträge verarbeiten ---
+        // Reguläre Stunden verarbeiten
         foreach ($timetable as $entry) {
             $dayNum = (int)$entry['day_of_week'];
             $period = (int)$entry['period_number'];
             $regKey = $this->getDateForDayOfWeek($year, $week, $dayNum, $timezone)->format('Y-m-d') . '-' . $period;
             $blockId = $entry['block_id'];
-
+            
+            // Überspringen, wenn von Vertretung betroffen oder Teil eines bereits verarbeiteten Blocks
             if (isset($substitutionMap[$regKey]) || isset($processedRegularSlots[$regKey]) || ($blockId && isset($processedRegularSlots[$blockId]))) {
                 continue;
             }
@@ -285,14 +278,17 @@ class IcalService
             $dateObj = $this->getDateForDayOfWeek($year, $week, $dayNum, $timezone);
             $dtStart = $dateObj->setTime((int)substr($times['start'], 0, 2), (int)substr($times['start'], 2, 2));
             $dtEnd = $dateObj->setTime((int)substr($times['end'], 0, 2), (int)substr($times['end'], 2, 2));
+            
             $uidBase = 'entry-' . $entry['entry_id'];
 
             if ($blockId) {
+                // Dies ist der Start eines Blocks, der noch nicht verarbeitet wurde
                 $blockEntries = array_filter($timetable, fn($e) => $e['block_id'] === $blockId);
                 if (!empty($blockEntries)) {
                     $minPeriod = min(array_column($blockEntries, 'period_number'));
                     $maxPeriod = max(array_column($blockEntries, 'period_number'));
-                    if ($period === $minPeriod) {
+                    
+                    if ($period === $minPeriod) { // Nur den ersten Eintrag des Blocks verarbeiten
                          $startTime = self::PERIOD_TIMES[$minPeriod]['start'] ?? null;
                          $endTime = self::PERIOD_TIMES[$maxPeriod]['end'] ?? null;
                          if ($startTime && $endTime) {
@@ -300,17 +296,20 @@ class IcalService
                              $dtEnd = $dateObj->setTime((int)substr($endTime, 0, 2), (int)substr($endTime, 2, 2));
                          }
                          $uidBase = 'block-' . $blockId;
+                         // Alle Slots dieses Blocks als verarbeitet markieren
                          for ($p = $minPeriod; $p <= $maxPeriod; $p++) {
                              $blockKey = $dateObj->format('Y-m-d') . '-' . $p;
                              $processedRegularSlots[$blockKey] = true;
                          }
-                         $processedRegularSlots[$blockId] = true;
+                         $processedRegularSlots[$blockId] = true; // Block-ID selbst markieren
                     } else {
-                         continue;
+                         continue; // Nicht der Start-Eintrag des Blocks
                     }
+                } else {
+                     $processedRegularSlots[$regKey] = true; // Als Einzelstunde markieren
                 }
             } else {
-                 $processedRegularSlots[$regKey] = true;
+                $processedRegularSlots[$regKey] = true; // Als Einzelstunde markieren
             }
 
             $summary = ($entry['subject_shortcut'] ?? '???') . " - " . ($userRole === 'schueler' ? ($entry['teacher_shortcut'] ?? '???') : ($entry['class_name'] ?? '???'));
@@ -344,19 +343,15 @@ class IcalService
                 continue;
             }
 
-            // KORREKTUR: period_number existiert nicht mehr im academic_events Schema (V10)
-            // $period = $event['period_number'] ? (int)$event['period_number'] : null;
-            // $times = $period ? (self::PERIOD_TIMES[$period] ?? null) : null;
-            $times = null; // Events sind jetzt immer ganztägig
+            $times = null; 
 
             if ($times) {
-                // (Dieser Block wird nicht mehr ausgeführt)
+                // Logik für zeitbasierte Events (derzeit nicht verwendet)
                 $dtStart = $dateObj->setTime((int)substr($times['start'], 0, 2), (int)substr($times['start'], 2, 2));
                 $dtEnd = $dateObj->setTime((int)substr($times['end'], 0, 2), (int)substr($times['end'], 2, 2));
                 $dtStartFormat = 'Ymd\THis';
                 $dtEndFormat = 'Ymd\THis';
-                // $timeInfo = " ({$period}. Std.)"; // Veraltet
-                $timeInfo = ""; // NEU
+                $timeInfo = ""; 
             } else {
                 // Ganztägiges Event
                 $dtStart = $dateObj;
@@ -402,6 +397,58 @@ class IcalService
         }
     }
 
+    // NEU: Verarbeitet gebuchte Sprechstunden
+    private function processAppointments(array &$events, array $appointments, DateTimeZone $timezone, string $userRole): void
+    {
+        foreach ($appointments as $app) {
+            try {
+                // Termin-Zeit berechnen
+                $dateObj = new DateTimeImmutable($app['appointment_date'] . ' ' . $app['appointment_time'], $timezone);
+                $dtStart = $dateObj;
+                $dtEnd = $dateObj->modify('+' . intval($app['duration'] ?? 15) . ' minutes');
+                $dtStartFormat = 'Ymd\THis';
+                $dtEndFormat = 'Ymd\THis';
+
+                $summary = '🗣️ Sprechstunde';
+                $description = "Sprechstunde\n";
+                $location = $app['location'] ?? 'N/A';
+
+                if ($userRole === 'schueler') {
+                    $summary .= ' bei ' . ($app['teacher_shortcut'] ?? $app['teacher_name'] ?? 'Lehrer');
+                    $description .= "Lehrer: " . ($app['teacher_name'] ?? 'N/A') . "\n";
+                    if (!empty($app['notes'])) {
+                        $description .= "Deine Notiz: " . $app['notes'] . "\n";
+                    }
+                } else { // lehrer
+                    $summary .= ' mit ' . ($app['student_name'] ?? 'Schüler');
+                    $description .= "Schüler: " . ($app['student_name'] ?? 'N/A') . "\n";
+                    if (!empty($app['class_name'])) {
+                        $description .= "Klasse: " . $app['class_name'] . "\n";
+                    }
+                    if (!empty($app['notes'])) {
+                        $description .= "Notiz des Schülers: " . $app['notes'] . "\n";
+                    }
+                }
+                $description .= "Ort: " . $location . "\n";
+                $description .= "Status: Gebucht";
+
+                $events[] = [
+                    'uid' => 'appt-' . $app['appointment_id'],
+                    'dtStart' => $dtStart,
+                    'dtEnd' => $dtEnd,
+                    'dtStartFormat' => $dtStartFormat,
+                    'dtEndFormat' => $dtEndFormat,
+                    'summary' => $summary,
+                    'location' => $location,
+                    'description' => trim($description),
+                    'status' => 'CONFIRMED',
+                ];
+            } catch (Exception $e) {
+                error_log("Fehler beim Verarbeiten von Termin (ID: {$app['appointment_id']}): " . $e->getMessage());
+            }
+        }
+    }
+
     private function formatAsIcs(array $events, array $user): string
     {
         $ics = "BEGIN:VCALENDAR\r\n";
@@ -411,8 +458,9 @@ class IcalService
         $ics .= "METHOD:PUBLISH\r\n";
         $ics .= "X-WR-CALNAME:PAUSE Stundenplan (" . $this->escapeIcsString($user['username']) . ")\r\n";
         $ics .= "X-WR-TIMEZONE:Europe/Berlin\r\n";
-        $ics .= "X-PUBLISHED-TTL:PT1H\r\n";
+        $ics .= "X-PUBLISHED-TTL:PT1H\r\n"; // 1 Stunde Cache
 
+        // VTIMEZONE Definition für Europe/Berlin
         $ics .= "BEGIN:VTIMEZONE\r\n";
         $ics .= "TZID:Europe/Berlin\r\n";
         $ics .= "X-LIC-LOCATION:Europe/Berlin\r\n";
@@ -437,11 +485,18 @@ class IcalService
         foreach ($events as $event) {
             $dtStart = $event['dtStart'];
             $dtEnd = $event['dtEnd'];
+            
             $dtStartFormat = $event['dtStartFormat'] ?? 'Ymd\THis';
             $dtEndFormat = $event['dtEndFormat'] ?? 'Ymd\THis';
+
             $dtStartString = $dtStart->format($dtStartFormat);
             $dtEndString = $dtEnd->format($dtEndFormat);
+
             $datePrefix = ($dtStartFormat === 'Ymd') ? ';VALUE=DATE' : ';TZID=Europe/Berlin';
+
+            if ($dtStartFormat === 'Ymd\THis' && $dtEndFormat === 'Ymd') {
+                 $dtEndString = $dtEnd->format('Ymd\THis'); 
+            }
 
             $ics .= "BEGIN:VEVENT\r\n";
             $ics .= "UID:" . $event['uid'] . '-' . $dtStart->format('YmdHis') . "@pause.pmi\r\n";
@@ -449,12 +504,14 @@ class IcalService
             $ics .= "DTSTART{$datePrefix}:" . $dtStartString . "\r\n";
             $ics .= "DTEND{$datePrefix}:" . $dtEndString . "\r\n";
             $ics .= "SUMMARY:" . $this->escapeIcsString($event['summary']) . "\r\n";
+
             if (!empty($event['location'])) {
                 $ics .= "LOCATION:" . $this->escapeIcsString($event['location']) . "\r\n";
             }
             if (!empty($event['description'])) {
                 $ics .= "DESCRIPTION:" . $this->escapeIcsString($event['description']) . "\r\n";
             }
+
             $ics .= "STATUS:" . $event['status'] . "\r\n";
             $ics .= ($dtStartFormat === 'Ymd') ? "TRANSP:TRANSPARENT\r\n" : "TRANSP:OPAQUE\r\n";
             $ics .= "END:VEVENT\r\n";
@@ -470,8 +527,8 @@ class IcalService
         $string = str_replace('\\', '\\\\', $string);
         $string = str_replace(';', '\;', $string);
         $string = str_replace(',', '\,', $string);
-        $string = str_replace("\r", '', $string);
-        $string = str_replace("\n", '\n', $string);
+        $string = str_replace("\r", '', $string); 
+        $string = str_replace("\n", '\n', $string); 
         return $string;
     }
 }

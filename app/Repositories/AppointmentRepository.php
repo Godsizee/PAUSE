@@ -1,8 +1,5 @@
 <?php
-// app/Repositories/AppointmentRepository.php
-
 namespace App\Repositories;
-
 use PDO;
 use Exception;
 use DateTime;
@@ -21,67 +18,45 @@ class AppointmentRepository
         $this->timezone = new DateTimeZone('Europe/Berlin');
     }
 
-    // --- Lehrer: Verfügbarkeit verwalten ---
-
-    /**
-     * Fügt ein neues Verfügbarkeitsfenster für einen Lehrer hinzu.
-     * @param int $teacherUserId
-     * @param int $dayOfWeek (1-5)
-     * @param string $startTime (HH:MM)
-     * @param string $endTime (HH:MM)
-     * @param int $slotDuration (in Minuten)
-     * @return int ID der neuen Verfügbarkeit
-     * @throws Exception
-     */
-    public function createAvailability(int $teacherUserId, int $dayOfWeek, string $startTime, string $endTime, int $slotDuration): int
+    public function createAvailability(int $teacherUserId, int $dayOfWeek, string $startTime, string $endTime, int $slotDuration, ?string $location): int
     {
-        // TODO: Auf Überlappung mit bestehenden Fenstern prüfen
-        $sql = "INSERT INTO teacher_availability (teacher_user_id, day_of_week, start_time, end_time, slot_duration)
-                VALUES (:teacher_user_id, :day_of_week, :start_time, :end_time, :slot_duration)";
+        $sql = "INSERT INTO teacher_availability (teacher_user_id, day_of_week, start_time, end_time, slot_duration, location)
+              VALUES (:teacher_user_id, :day_of_week, :start_time, :end_time, :slot_duration, :location)";
         $stmt = $this->pdo->prepare($sql);
         $success = $stmt->execute([
             ':teacher_user_id' => $teacherUserId,
             ':day_of_week' => $dayOfWeek,
             ':start_time' => $startTime,
             ':end_time' => $endTime,
-            ':slot_duration' => $slotDuration
+            ':slot_duration' => $slotDuration,
+            ':location' => $location
         ]);
-
         if (!$success) {
             throw new Exception("Sprechzeit konnte nicht gespeichert werden (eventuell überlappend?).");
         }
         return (int)$this->pdo->lastInsertId();
     }
 
-    /**
-     * Löscht ein Verfügbarkeitsfenster.
-     * @param int $availabilityId
-     * @param int $teacherUserId (Zur Sicherheit)
-     * @return bool
-     */
     public function deleteAvailability(int $availabilityId, int $teacherUserId): bool
     {
-        // Löscht auch alle zukünftigen, noch nicht stattgefundenen Termine, die auf diesem Fenster basieren
         $this->pdo->beginTransaction();
         try {
-            // 1. Zukünftige Termine löschen
-            $sqlDeleteAppointments = "DELETE FROM appointments 
-                                      WHERE teacher_user_id = :teacher_user_id 
-                                        AND appointment_date >= CURDATE()
-                                        AND status = 'booked'
-                                        AND appointment_time >= (SELECT start_time FROM teacher_availability WHERE availability_id = :availability_id)
-                                        AND appointment_time < (SELECT end_time FROM teacher_availability WHERE availability_id = :availability_id)";
-            // HINWEIS: Diese Logik ist vereinfacht. Sie löscht alle Termine des Lehrers an dem Tag im Fenster.
-            // Eine bessere Logik würde die availability_id in appointments speichern.
-            // Für dieses MVP löschen wir einfach das Fenster.
+            // Zukünftige gebuchte Termine löschen, die zu diesem Fenster gehören
+            $sqlDeleteAppointments = "DELETE a FROM appointments a
+                                      JOIN teacher_availability ta ON a.teacher_user_id = ta.teacher_user_id
+                                      WHERE a.teacher_user_id = :teacher_user_id
+                                        AND a.availability_id = :availability_id
+                                        AND a.appointment_date >= CURDATE()
+                                        AND a.status = 'booked'";
+
+            $stmtDelApp = $this->pdo->prepare($sqlDeleteAppointments);
+            $stmtDelApp->execute([
+                ':teacher_user_id' => $teacherUserId,
+                ':availability_id' => $availabilityId
+            ]);
             
-            // TODO: Wenn appointments.availability_id hinzugefügt wird, stattdessen das verwenden:
-            // $sqlDeleteAppointments = "DELETE FROM appointments WHERE availability_id = :availability_id AND appointment_date >= CURDATE()";
-            // $this->pdo->prepare($sqlDeleteAppointments)->execute([':availability_id' => $availabilityId]);
-
-
-            // 2. Verfügbarkeitsfenster löschen
-            $sqlDeleteAvailability = "DELETE FROM teacher_availability 
+            // Das Verfügbarkeitsfenster selbst löschen
+            $sqlDeleteAvailability = "DELETE FROM teacher_availability
                                       WHERE availability_id = :availability_id AND teacher_user_id = :teacher_user_id";
             $stmt = $this->pdo->prepare($sqlDeleteAvailability);
             $stmt->execute([
@@ -91,7 +66,6 @@ class AppointmentRepository
             
             $this->pdo->commit();
             return $stmt->rowCount() > 0;
-
         } catch (Exception $e) {
             $this->pdo->rollBack();
             error_log("Fehler beim Löschen der Sprechzeit: " . $e->getMessage());
@@ -99,11 +73,6 @@ class AppointmentRepository
         }
     }
 
-    /**
-     * Holt alle Verfügbarkeitsfenster für einen Lehrer.
-     * @param int $teacherUserId
-     * @return array
-     */
     public function getAvailabilities(int $teacherUserId): array
     {
         $sql = "SELECT * FROM teacher_availability WHERE teacher_user_id = :teacher_user_id ORDER BY day_of_week, start_time";
@@ -111,101 +80,106 @@ class AppointmentRepository
         $stmt->execute([':teacher_user_id' => $teacherUserId]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
-
-    // --- Schüler: Slots abrufen und buchen ---
-
+    
     /**
-     * Holt alle verfügbaren (noch nicht gebuchten) Slots für einen Lehrer an einem bestimmten Datum.
-     * @param int $teacherUserId
-     * @param string $date (Y-m-d)
-     * @return array
-     * @throws Exception
+     * Holt alle verfügbaren (nicht gebuchten) Slots für einen Lehrer in einem zukünftigen Zeitraum.
      */
-    public function getAvailableSlots(int $teacherUserId, string $date): array
+    public function getUpcomingAvailableSlots(int $teacherUserId, int $daysInFuture = 14): array
     {
-        $dateObj = new DateTime($date, $this->timezone);
-        $dayOfWeek = (int)$dateObj->format('N'); // 1=Mo, 7=So
-
-        // 1. Hole alle Fenster für diesen Wochentag
-        $sqlAvail = "SELECT * FROM teacher_availability 
-                     WHERE teacher_user_id = :teacher_user_id AND day_of_week = :day_of_week";
-        $stmtAvail = $this->pdo->prepare($sqlAvail);
-        $stmtAvail->execute([':teacher_user_id' => $teacherUserId, ':day_of_week' => $dayOfWeek]);
-        $availabilities = $stmtAvail->fetchAll(PDO::FETCH_ASSOC);
-
+        // 1. Alle Verfügbarkeitsfenster des Lehrers holen
+        $availabilities = $this->getAvailabilities($teacherUserId);
         if (empty($availabilities)) {
-            return []; // Lehrer bietet an diesem Wochentag keine Sprechzeiten an
+            return [];
         }
 
-        // 2. Hole alle bereits gebuchten Termine für diesen Tag
-        $sqlBooked = "SELECT appointment_time FROM appointments 
-                      WHERE teacher_user_id = :teacher_user_id AND appointment_date = :date AND status = 'booked'";
+        $today = new DateTime('now', $this->timezone);
+        $today->setTime(0, 0, 0);
+        $endDate = (new DateTime('now', $this->timezone))->modify("+{$daysInFuture} days");
+
+        // 2. Alle gebuchten Termine in diesem Zeitraum holen
+        $sqlBooked = "SELECT appointment_date, appointment_time FROM appointments
+                           WHERE teacher_user_id = :teacher_user_id
+                             AND appointment_date BETWEEN :start_date AND :end_date
+                             AND status = 'booked'";
         $stmtBooked = $this->pdo->prepare($sqlBooked);
-        $stmtBooked->execute([':teacher_user_id' => $teacherUserId, ':date' => $date]);
-        $bookedTimes = $stmtBooked->fetchAll(PDO::FETCH_COLUMN, 0);
-        $bookedSlots = array_flip($bookedTimes); // Macht Zeiten zu Schlüsseln für schnelle Suche
+        $stmtBooked->execute([
+            ':teacher_user_id' => $teacherUserId,
+            ':start_date' => $today->format('Y-m-d'),
+            ':end_date' => $endDate->format('Y-m-d')
+        ]);
+        
+        $bookedSlots = [];
+        foreach ($stmtBooked->fetchAll(PDO::FETCH_ASSOC) as $row) {
+            $bookedSlots[$row['appointment_date'] . '_' . $row['appointment_time']] = true;
+        }
 
+        // 3. Alle Slots generieren und gegen gebuchte Slots prüfen
         $availableSlots = [];
+        $currentDate = $today;
+        $dateInterval = new DateInterval('P1D');
+        $dateRange = new DatePeriod($currentDate, $dateInterval, $endDate->modify('+1 day')); // +1, damit der letzte Tag inklusiv ist
 
-        // 3. Generiere Slots aus den Fenstern und filtere gebuchte heraus
-        foreach ($availabilities as $window) {
-            $start = new DateTime($date . ' ' . $window['start_time'], $this->timezone);
-            $end = new DateTime($date . ' ' . $window['end_time'], $this->timezone);
-            $duration = $window['slot_duration'];
-            $interval = new DateInterval("PT{$duration}M");
-            $period = new DatePeriod($start, $interval, $end);
+        foreach ($dateRange as $date) {
+            $dayOfWeek = (int)$date->format('N'); // 1 (Mon) - 7 (Son)
+            
+            // Überspringe Wochenenden
+            if ($dayOfWeek > 5) {
+                continue;
+            }
 
-            foreach ($period as $slotStart) {
-                $timeString = $slotStart->format('H:i:s'); // z.B. 14:00:00
-                $timeStringShort = $slotStart->format('H:i'); // z.B. 14:00
+            // Finde passende Fenster für diesen Wochentag
+            $windowsForDay = array_filter($availabilities, fn($av) => $av['day_of_week'] == $dayOfWeek);
+            $dateString = $date->format('Y-m-d');
 
-                // Prüfe, ob der Slot bereits gebucht ist
-                if (!isset($bookedSlots[$timeString])) {
-                    $availableSlots[] = [
-                        'time' => $timeString, // Volle Zeit für die Buchung
-                        'display' => $timeStringShort, // Angezeigte Zeit
-                        'duration' => $duration
-                    ];
+            foreach ($windowsForDay as $window) {
+                $start = new DateTime($dateString . ' ' . $window['start_time'], $this->timezone);
+                $end = new DateTime($dateString . ' ' . $window['end_time'], $this->timezone);
+                $duration = $window['slot_duration'];
+                $interval = new DateInterval("PT{$duration}M");
+                $slotPeriod = new DatePeriod($start, $interval, $end);
+
+                foreach ($slotPeriod as $slotStart) {
+                    $timeString = $slotStart->format('H:i:s');
+                    $timeStringShort = $slotStart->format('H:i');
+                    
+                    // Prüfen, ob Slot bereits gebucht ist
+                    if (!isset($bookedSlots[$dateString . '_' . $timeString])) {
+                        $availableSlots[] = [
+                            'date' => $dateString,
+                            'time' => $timeString,
+                            'display' => $timeStringShort,
+                            'duration' => $duration,
+                            'location' => $window['location'] ?? 'N/A', // Standort hinzufügen
+                            'availability_id' => $window['availability_id'] // ID des Fensters hinzufügen
+                        ];
+                    }
                 }
             }
         }
-
+        
         return $availableSlots;
     }
 
-    /**
-     * Bucht einen Termin für einen Schüler.
-     * @param int $studentUserId
-     * @param int $teacherUserId
-     * @param string $date (Y-m-d)
-     * @param string $time (HH:MM:SS)
-     * @param int $duration
-     * @param string|null $notes
-     * @return int ID des neuen Termins
-     * @throws Exception
-     */
-    public function bookAppointment(int $studentUserId, int $teacherUserId, string $date, string $time, int $duration, ?string $notes): int
+    public function bookAppointment(int $studentUserId, int $teacherUserId, int $availabilityId, string $date, string $time, int $duration, ?string $location, ?string $notes): int
     {
-        // Atomare Operation: INSERT versuchen. Wenn der unique_appointment_slot fehlschlägt,
-        // (weil jemand anderes schneller war), wird eine PDOException ausgelöst.
-        $sql = "INSERT INTO appointments (student_user_id, teacher_user_id, appointment_date, appointment_time, duration, notes, status)
-                VALUES (:student_user_id, :teacher_user_id, :date, :time, :duration, :notes, 'booked')";
+        $sql = "INSERT INTO appointments (student_user_id, teacher_user_id, availability_id, appointment_date, appointment_time, duration, location, notes, status)
+              VALUES (:student_user_id, :teacher_user_id, :availability_id, :date, :time, :duration, :location, :notes, 'booked')";
         
         try {
             $stmt = $this->pdo->prepare($sql);
             $stmt->execute([
                 ':student_user_id' => $studentUserId,
                 ':teacher_user_id' => $teacherUserId,
+                ':availability_id' => $availabilityId,
                 ':date' => $date,
                 ':time' => $time,
                 ':duration' => $duration,
+                ':location' => $location,
                 ':notes' => $notes
             ]);
             return (int)$this->pdo->lastInsertId();
-
         } catch (\PDOException $e) {
-            if ($e->errorInfo[1] == 1062) { // 1062 = Duplicate entry
+            if ($e->errorInfo[1] == 1062) { // Duplicate entry
                 throw new Exception("Dieser Termin wurde gerade von jemand anderem gebucht. Bitte wählen Sie einen anderen Slot.", 409);
             } else {
                 error_log("Fehler bei Terminbuchung: " . $e->getMessage());
@@ -213,19 +187,10 @@ class AppointmentRepository
             }
         }
     }
-    
-    // --- Termine abrufen (für "Mein Tag") ---
 
-    /**
-     * Holt alle gebuchten Termine eines Schülers in einem Datumsbereich.
-     * @param int $studentUserId
-     * @param string $startDate (Y-m-d)
-     * @param string $endDate (Y-m-d)
-     * @return array
-     */
     public function getAppointmentsForStudent(int $studentUserId, string $startDate, string $endDate): array
     {
-        $sql = "SELECT a.*, CONCAT(t.first_name, ' ', t.last_name) as teacher_name, t.teacher_shortcut
+        $sql = "SELECT a.*, CONCAT(t.first_name, ' ', t.last_name) as teacher_name, t.teacher_shortcut, a.location
                 FROM appointments a
                 JOIN users u ON a.teacher_user_id = u.user_id
                 JOIN teachers t ON u.teacher_id = t.teacher_id
@@ -233,6 +198,7 @@ class AppointmentRepository
                   AND a.status = 'booked'
                   AND a.appointment_date BETWEEN :start_date AND :end_date
                 ORDER BY a.appointment_date, a.appointment_time";
+        
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             ':student_user_id' => $studentUserId,
@@ -242,16 +208,9 @@ class AppointmentRepository
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
-    /**
-     * Holt alle gebuchten Termine eines Lehrers in einem Datumsbereich.
-     * @param int $teacherUserId
-     * @param string $startDate (Y-m-d)
-     * @param string $endDate (Y-m-d)
-     * @return array
-     */
     public function getAppointmentsForTeacher(int $teacherUserId, string $startDate, string $endDate): array
     {
-        $sql = "SELECT a.*, CONCAT(u.first_name, ' ', u.last_name) as student_name, c.class_name
+        $sql = "SELECT a.*, CONCAT(u.first_name, ' ', u.last_name) as student_name, c.class_name, c.class_id, a.location
                 FROM appointments a
                 JOIN users u ON a.student_user_id = u.user_id
                 LEFT JOIN classes c ON u.class_id = c.class_id
@@ -259,6 +218,7 @@ class AppointmentRepository
                   AND a.status = 'booked'
                   AND a.appointment_date BETWEEN :start_date AND :end_date
                 ORDER BY a.appointment_date, a.appointment_time";
+        
         $stmt = $this->pdo->prepare($sql);
         $stmt->execute([
             ':teacher_user_id' => $teacherUserId,
@@ -267,18 +227,10 @@ class AppointmentRepository
         ]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-    
-    /**
-     * Storniert einen Termin (durch Schüler oder Lehrer).
-     * @param int $appointmentId
-     * @param int $userId (Der stornierende Benutzer)
-     * @param string $role (Die Rolle des stornierenden Benutzers)
-     * @return bool
-     * @throws Exception
-     */
+
     public function cancelAppointment(int $appointmentId, int $userId, string $role): bool
     {
-        $sql = "UPDATE appointments SET status = :status 
+        $sql = "UPDATE appointments SET status = :status
                 WHERE appointment_id = :appointment_id AND ";
 
         if ($role === 'schueler') {
@@ -297,11 +249,29 @@ class AppointmentRepository
             ':appointment_id' => $appointmentId,
             ':user_id' => $userId
         ]);
-        
+
         if ($stmt->rowCount() === 0) {
             throw new Exception("Termin nicht gefunden oder keine Berechtigung zum Stornieren.", 404);
         }
         
         return $success;
+    }
+
+    public function getAllAppointmentsForTeacher(int $teacherUserId, string $sortOrder = 'DESC'): array
+    {
+        // NEU: a.notes und a.location hinzugefügt
+        $sql = "SELECT a.*, CONCAT(u.first_name, ' ', u.last_name) as student_name, c.class_name, c.class_id, a.notes, a.location
+                FROM appointments a
+                JOIN users u ON a.student_user_id = u.user_id
+                LEFT JOIN classes c ON u.class_id = c.class_id
+                WHERE a.teacher_user_id = :teacher_user_id
+                  AND a.status = 'booked'
+                ORDER BY a.appointment_date " . ($sortOrder === 'DESC' ? 'DESC' : 'ASC') . ", a.appointment_time " . ($sortOrder === 'DESC' ? 'DESC' : 'ASC');
+        
+        $stmt = $this->pdo->prepare($sql);
+        $stmt->execute([
+            ':teacher_user_id' => $teacherUserId
+        ]);
+        return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }

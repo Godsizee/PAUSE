@@ -1,8 +1,6 @@
 <?php
-// pages/admin/stammdaten.php
 include_once dirname(__DIR__) . '/partials/header.php';
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">Stammdatenverwaltung</h1>
     <div class="dashboard-grid">
@@ -14,7 +12,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                 <button class="tab-button" data-target="teachers-section">Lehrer</button>
                 <button class="tab-button" data-target="classes-section">Klassen</button>
             </nav>
-
             <div class="tab-content">
                 <div class="dashboard-section active" id="subjects-section">
                     <div class="form-container" id="subject-form-container">
@@ -55,7 +52,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </div>
                     </div>
                 </div>
-
                 <div class="dashboard-section" id="rooms-section">
                      <div class="form-container" id="room-form-container">
                         <h4>Raum anlegen/bearbeiten</h4>
@@ -90,7 +86,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </div>
                     </div>
                 </div>
-
                 <div class="dashboard-section" id="teachers-section">
                     <div class="form-container" id="teacher-form-container">
                         <h4>Lehrer anlegen/bearbeiten</h4>
@@ -140,7 +135,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </div>
                     </div>
                 </div>
-
                 <div class="dashboard-section" id="classes-section">
                     <div class="form-container" id="class-form-container">
                         <h4>Klasse anlegen/bearbeiten</h4>
@@ -192,8 +186,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>
-

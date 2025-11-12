@@ -1,16 +1,12 @@
 <?php
-// pages/planer/dashboard.php
 include_once dirname(__DIR__) . '/partials/header.php';
 ?>
-
 <div class="page-wrapper planer-dashboard-wrapper">
     <!-- Main header section for the planner view -->
     <div class="planer-header">
         <h1 class="main-title">Stundenplan-Verwaltung</h1>
-
         <!-- Wrapper for all control elements on the right side -->
         <div class="planer-actions-wrapper">
-
             <!-- Filter controls section -->
             <div class="planer-controls">
                 <!-- View mode switcher (Class/Teacher) -->
@@ -41,13 +37,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     <label for="week-selector">KW:</label>
                     <select id="week-selector"></select>
                 </div>
-                <!-- Date selector (for viewing specific day's substitutions) -->
-                <div class="form-group">
-                    <label for="date-selector">Datum für Vertr.:</label>
-                    <input type="date" id="date-selector">
-                </div>
             </div> <!-- End planer-controls -->
-
             <!-- Publish controls section -->
             <div class="publish-controls">
                  <!-- Display area for the current week's publish status -->
@@ -64,20 +54,16 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     <button id="unpublish-teacher-btn" class="btn btn-warning btn-small hidden">Lehrer zurückziehen</button>
                  </div>
             </div> <!-- End publish-controls -->
-
         </div> <!-- End planer-actions-wrapper -->
     </div> <!-- End planer-header -->
-
     <!-- NEU: Grid-Layout für Sidebar und Hauptinhalt -->
     <div class="dashboard-grid">
         <?php include_once __DIR__ . '/partials/_sidebar.php'; // NEU: Planer-Sidebar einbinden ?>
-
         <main class="dashboard-content" id="planer-main-content">
             <!-- Container where the timetable grid will be rendered -->
             <div class="timetable-container" id="timetable-container">
                 <div class="loading-spinner"></div> <!-- Loading indicator -->
             </div>
-
             <!-- Massenbearbeitung MOVED HERE -->
             <div class="bulk-actions-controls" style="margin-top: 20px;"> <!-- Added margin-top for spacing -->
                 <button id="copy-week-btn" class="btn btn-secondary btn-small">
@@ -101,8 +87,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
             </div>
         </main>
     </div> <!-- Ende .dashboard-grid -->
-
-
     <!-- Modal for editing/creating timetable entries -->
      <div id="timetable-modal" class="modal-overlay">
          <div class="modal-box">
@@ -117,14 +101,11 @@ include_once dirname(__DIR__) . '/partials/header.php';
                  <input type="hidden" id="modal_period_number" name="period_number">
                  <input type="hidden" id="original_subject_id" name="original_subject_id">
                  <input type="hidden" id="modal_editing_template" name="editing_template" value="false"> <!-- NEU: Flag für Template-Editor -->
-
-
                  <!-- Tabs to switch between regular entry and substitution -->
                  <div class="modal-tabs">
                      <button type="button" class="tab-button active" data-mode="regular">Reguläre Stunde</button>
                      <button type="button" class="tab-button" data-mode="substitution">Vertretung/Änderung</button>
                  </div>
-
                  <!-- Fields for regular timetable entry -->
                  <div id="regular-fields" class="modal-tab-content active">
                      <!-- Klassen-Auswahl für Template-Editor (wird nur dort angezeigt) -->
@@ -151,7 +132,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         <input type="text" id="regular_comment" name="comment" placeholder="z.B. Klausur, Besonderheit">
                     </div>
                  </div>
-
                  <!-- Fields for substitution entry -->
                  <div id="substitution-fields" class="modal-tab-content">
                      <!-- Substitution Fields bleiben wie gehabt -->
@@ -184,24 +164,21 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         </div>
                     </div>
                  </div>
-
                  <!-- Konflikt-Warnungs-Box (wird im Template-Editor deaktiviert) -->
                  <div class="modal-conflict-warning" id="modal-conflict-warning" style="display: none;">
                      <!-- Konfliktmeldungen werden hier per JS eingefügt -->
                  </div>
-
-
                  <!-- Modal action buttons -->
                  <div class="modal-actions">
-                     <button type="button" class="btn btn-danger" id="delete-entry-btn" style="display: none;">Löschen</button>
-                     <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Abbrechen</button>
-                     <button type="submit" class="btn btn-primary" id="modal-save-btn">Speichern</button>
+                     <button type="button" class="btn btn-danger" id="delete-entry-btn">Löschen</button>
+                     <div class="modal-actions-right">
+                         <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Abbrechen</button>
+                         <button type="submit" class="btn btn-primary" id="modal-save-btn">Speichern</button>
+                     </div>
                  </div>
              </form>
          </div>
      </div> <!-- End timetable-modal -->
-
-
     <!-- Modal für Wochenkopie -->
     <div id="copy-week-modal" class="modal-overlay">
         <!-- Inhalt bleibt unverändert -->
@@ -209,7 +186,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
              <h2 id="copy-week-modal-title">Stundenplan kopieren</h2>
              <form id="copy-week-form">
                  <p>Kopiere den Plan von der aktuell ausgewählten Woche nach:</p>
-
                  <div class="copy-week-form">
                      <div class="form-group copy-from">
                          <label>Von (Quelle):</label>
@@ -225,11 +201,9 @@ include_once dirname(__DIR__) . '/partials/header.php';
                          <select id="copy-target-week" required></select>
                      </div>
                  </div>
-
                  <div class="modal-conflict-warning" id="copy-week-warning">
                      <strong>Achtung:</strong> Alle vorhandenen Stundenplan-Einträge für die ausgewählte Klasse/Lehrer in der Zielwoche werden überschrieben. Vertretungen werden nicht kopiert.
                  </div>
-
                  <div class="modal-actions">
                      <button type="button" class="btn btn-secondary" id="copy-week-cancel-btn">Abbrechen</button>
                      <button type="submit" class="btn btn-primary" id="copy-week-confirm-btn">Kopieren & Überschreiben</button>
@@ -238,15 +212,12 @@ include_once dirname(__DIR__) . '/partials/header.php';
          </div>
      </div>
      <!-- ENDE Modal für Wochenkopie -->
-
     <!-- Modal zum Erstellen/Verwalten von Vorlagen -->
     <div id="manage-templates-modal" class="modal-overlay">
         <div class="modal-box"> <!-- Style wurde in planer.css angepasst (breiter) -->
             <h2 id="manage-templates-modal-title">Vorlagen verwalten</h2>
-
             <!-- Container für die Ansichten: Liste vs. Editor -->
             <div id="manage-templates-view-container">
-
                 <!-- Ansicht 1: Liste der Vorlagen + Erstellen-Optionen -->
                 <div id="template-list-view" class="manage-templates-view active">
                     <form id="create-template-form">
@@ -266,9 +237,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
                              </div>
                          </div>
                     </form>
-
                     <hr style="margin: 25px 0;">
-
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                          <h4>Bestehende Vorlagen</h4>
                          <button type="button" id="create-empty-template-btn" class="btn btn-primary btn-small">
@@ -276,13 +245,11 @@ include_once dirname(__DIR__) . '/partials/header.php';
                              Neue leere Vorlage
                          </button>
                     </div>
-
                     <div id="templates-list-container" style="max-height: 300px; overflow-y: auto;">
                          <!-- Liste wird per JS gefüllt -->
                          <p>Lade Vorlagen...</p>
                     </div>
                 </div>
-
                 <!-- Ansicht 2: Editor für eine neue/bestehende Vorlage (Initial hidden) -->
                 <div id="template-editor-view" class="manage-templates-view" style="display: none;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
@@ -303,7 +270,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                              <input type="text" id="template-editor-description">
                          </div>
                     </div>
-
                     <p style="color: var(--color-text-muted); font-size: 0.9em; margin-top: 10px;">
                          Klicken Sie auf eine Zelle, um einen Eintrag hinzuzufügen/zu bearbeiten. Die Klasse wird beim Anwenden der Vorlage auf eine Klasse automatisch angepasst.
                          Wenn Sie die Vorlage auf einen Lehrer anwenden, wird die hier gewählte Klasse verwendet (relevant für Vertretungen etc.).
@@ -314,16 +280,13 @@ include_once dirname(__DIR__) . '/partials/header.php';
                          <div class="loading-spinner"></div>
                     </div>
                 </div>
-
             </div> <!-- Ende View Container -->
-
             <div class="modal-actions" style="margin-top: 25px;">
                 <button type="button" class="btn btn-secondary" id="manage-templates-close-btn">Schließen</button>
             </div>
         </div>
     </div>
     <!-- ENDE Modal zum Erstellen/Verwalten -->
-
     <!-- Modal zum Anwenden einer Vorlage -->
     <div id="apply-template-modal" class="modal-overlay">
         <!-- Inhalt bleibt unverändert -->
@@ -349,10 +312,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
         </div>
     </div>
     <!-- ENDE Modal zum Anwenden -->
-
 </div> <!-- End page-wrapper -->
-
 <?php
-// Include the footer partial
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

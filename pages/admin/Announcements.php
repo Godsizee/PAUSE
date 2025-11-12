@@ -1,10 +1,6 @@
 <?php
-// pages/admin/announcements.php
 include_once dirname(__DIR__) . '/partials/header.php';
-
-// Data ($allAnnouncements, $availableClasses, $userRole) is passed from AdminAnnouncementController->index()
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">Ankündigungsverwaltung</h1>
     <div class="dashboard-grid">
@@ -17,22 +13,18 @@ include_once dirname(__DIR__) . '/partials/header.php';
                     <form id="announcement-form" data-mode="create" method="POST" enctype="multipart/form-data">
                         <?php \App\Core\Security::csrfInput(); // Add CSRF input field ?>
                         <input type="hidden" name="announcement_id" id="announcement_id">
-
                         <div class="form-group">
                             <label for="title">Titel*</label>
                             <input type="text" name="title" id="title" required>
                         </div>
-
                         <div class="form-group">
                             <label for="content">Inhalt*</label>
                             <textarea name="content" id="content" rows="5" required></textarea>
                             <small class="form-hint">Sie können <a href="https://www.markdownguide.org/basic-syntax/" target="_blank">Markdown</a> für die Formatierung verwenden (z.B. **fett**, *kursiv*, Listen).</small>
                         </div>
-
                         <?php if (in_array($userRole, ['admin', 'planer'])): ?>
                             <fieldset class="target-group-fieldset">
                                 <legend>Zielgruppe auswählen*</legend>
-
                                 <div class="form-group" id="target-class-container">
                                     <label for="target_class_id">Klassenspezifisch (nur Schüler)</label>
                                     <select name="target_class_id" id="target_class_id">
@@ -45,8 +37,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                     </select>
                                     <small class="form-hint">ODER eine der folgenden Optionen wählen:</small>
                                 </div>
-
-
                                 <div class="checkbox-group">
                                     <label class="checkbox-label">
                                         <input type="checkbox" name="target_global" id="target_global" value="1">
@@ -62,9 +52,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                     </label>
                                 </div>
                                 <small class="form-hint error-hint" id="target-error" style="display: none; color: var(--color-danger); font-weight: bold;">Bitte eine Klasse ODER genau eine Checkbox auswählen.</small>
-
                             </fieldset>
-
                             <div class="form-group">
                                 <label for="attachment">Anhang (optional, max 5MB)</label>
                                 <input type="file" name="attachment" id="attachment">
@@ -76,7 +64,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                     </label>
                                 </div>
                             </div>
-
                         <?php elseif ($userRole === 'lehrer'): ?>
                             <input type="hidden" name="target_role_fixed" value="schueler">
                             <div class="form-group">
@@ -92,14 +79,12 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                 <small>Sie können nur Ankündigungen für Schüler einer Klasse erstellen.</small>
                             </div>
                         <?php endif; ?>
-
                         <div class="form-actions">
                             <button type="button" class="btn btn-secondary" id="cancel-edit-announcement" style="display: none;">Abbrechen</button>
                             <button type="submit" class="btn btn-primary">Speichern</button>
                         </div>
                     </form>
                 </div>
-
                 <div class="table-container announcements-list">
                     <h3>Bestehende Ankündigungen</h3>
                      <div id="announcements-table-container">
@@ -146,7 +131,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
                                           </td>
                                          <td class="actions">
                                              <?php
-                                               // Bestimmt, ob der aktuelle Benutzer diesen Eintrag ändern/löschen darf
                                                $canModify = in_array($userRole, ['admin', 'planer']) || ($userRole === 'lehrer' && $ann['user_id'] == $_SESSION['user_id']);
                                              ?>
                                              <?php if ($canModify): ?>
@@ -165,7 +149,6 @@ include_once dirname(__DIR__) . '/partials/header.php';
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

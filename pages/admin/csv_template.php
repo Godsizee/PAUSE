@@ -1,9 +1,6 @@
 <?php
-// pages/admin/csv_template.php
 include_once dirname(__DIR__) . '/partials/header.php';
-// $templateData wird vom CsvTemplateController übergeben
 ?>
-
 <div class="page-wrapper admin-dashboard-wrapper">
     <h1 class="main-title">CSV-Importvorlage (Benutzer)</h1>
     <div class="dashboard-grid">
@@ -16,9 +13,7 @@ include_once dirname(__DIR__) . '/partials/header.php';
                         Vorlage herunterladen
                     </a>
                 </div>
-                
                 <p>Die CSV-Datei muss exakt diese Spalten in dieser Reihenfolge enthalten. Die erste Zeile muss die Header-Zeile sein. Die Zeilen 2 und 3 sind Beispiele.</p>
-
                 <?php if (isset($templateData['error'])): ?>
                     <p class="message error"><?php echo htmlspecialchars($templateData['error']); ?></p>
                 <?php elseif (!empty($templateData['headers'])): ?>
@@ -52,12 +47,10 @@ include_once dirname(__DIR__) . '/partials/header.php';
                 <?php else: ?>
                      <p class="message error">Die Vorlagendatei ist leer oder konnte nicht korrekt gelesen werden.</p>
                 <?php endif; ?>
-
             </div>
         </main>
     </div>
 </div>
-
 <?php
 include_once dirname(__DIR__) . '/partials/footer.php';
 ?>

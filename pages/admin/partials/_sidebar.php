@@ -4,10 +4,8 @@
         <?php
         $currentUrl = $_SERVER['REQUEST_URI'];
         $userRole = $_SESSION['user_role'] ?? '';
-        // NEU: Lade Einstellungen für die Sidebar
         $settings = \App\Core\Utils::getSettings();
         ?>
-
         <?php if (in_array($userRole, ['admin'])): ?>
             <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('admin/dashboard')); ?>"
                class="dashboard-nav-item <?php echo (str_contains($currentUrl, 'admin/dashboard') ? 'active' : ''); ?>">
@@ -26,14 +24,12 @@
                 Stammdaten
             </a>
         <?php endif; ?>
-
         <?php if (in_array($userRole, ['admin', 'planer', 'lehrer'])): ?>
             <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('admin/announcements')); ?>"
                class="dashboard-nav-item <?php echo (str_contains($currentUrl, 'admin/announcements') ? 'active' : ''); ?>">
                 Ankündigungen
             </a>
         <?php endif; ?>
-        
         <?php // NEU: Link nur anzeigen, wenn das Board in den Settings aktiviert ist ?>
         <?php if (in_array($userRole, ['admin', 'planer']) && $settings['community_board_enabled']): ?>
             <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('admin/community-moderation')); ?>"
@@ -41,7 +37,6 @@
                 Schwarzes Brett (Mod.)
             </a>
         <?php endif; ?>
-        
         <?php if (in_array($userRole, ['admin'])): ?>
             <a href="<?php echo htmlspecialchars(\App\Core\Utils::url('admin/audit-logs')); ?>"
                class="dashboard-nav-item <?php echo (str_contains($currentUrl, 'admin/audit-logs') ? 'active' : ''); ?>">
@@ -56,8 +51,6 @@
                 Einstellungen
             </a>
         <?php endif; ?>
-
-
          <?php if (in_array($userRole, ['planer'])): ?>
                <?php endif; ?>
     </nav>

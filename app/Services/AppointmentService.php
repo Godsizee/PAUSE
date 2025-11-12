@@ -1,240 +1,138 @@
 <?php
-// app/Services/AppointmentService.php
-
-// MODIFIZIERT:
-// 1. Neue öffentliche Methoden getAppointmentsForStudent() und getAppointmentsForTeacher() hinzugefügt.
-// 2. Diese Methoden kapseln den Zugriff auf das private $appointmentRepo.
-
 namespace App\Services;
-
-use App\Repositories\AppointmentRepository;
-use App\Repositories\UserRepository;
-use PDO;
-use Exception;
 use DateTime;
 use DateTimeZone;
-use DateInterval;
-use DatePeriod;
-
-/**
- * Service-Klasse zur Kapselung der gesamten Geschäftslogik
- * für Sprechstunden (Verfügbarkeiten und Buchungen).
- * (Ausgelagert aus TeacherController und DashboardController).
- */
+use Exception;
 class AppointmentService
 {
-    // KORREKTUR: Repository ist jetzt privat
-    private AppointmentRepository $appointmentRepo;
-    private UserRepository $userRepo;
-    private DateTimeZone $timezone;
-
-    public function __construct(AppointmentRepository $appointmentRepo, UserRepository $userRepo)
+    private $timezone;
+    public function __construct($timezone = 'Europe/Berlin')
     {
-        $this->appointmentRepo = $appointmentRepo;
-        $this->userRepo = $userRepo;
-        $this->timezone = new DateTimeZone('Europe/Berlin');
+        try {
+            $this->timezone = new DateTimeZone($timezone);
+        } catch (Exception $e) {
+            $this->timezone = new DateTimeZone('UTC');
+            error_log("Ungültige Zeitzone angegeben: $timezone. Fallback auf UTC.");
+        }
     }
-
-    // --- Logik aus TeacherController ---
-
-    /**
-     * Holt die definierten Sprechstundenfenster eines Lehrers.
-     * (Unverändert)
-     */
-    public function getAvailabilities(int $teacherUserId): array
+    public function formatAppointments(array $appointments): array
     {
-        return $this->appointmentRepo->getAvailabilities($teacherUserId);
+        $formatted = [];
+        foreach ($appointments as $app) {
+            $formatted[] = $this->formatAppointment($app);
+        }
+        return $formatted;
     }
-
-    /**
-     * Erstellt ein neues Sprechstundenfenster für einen Lehrer.
-     * (Unverändert)
-     */
-    public function createAvailability(int $teacherUserId, array $data): int
+    public function formatAppointment(array $appointment): array
     {
-        // ... (Logik unverändert) ...
-        $dayOfWeek = filter_var($data['day_of_week'] ?? null, FILTER_VALIDATE_INT);
-        $startTime = $data['start_time'] ?? null;
-        $endTime = $data['end_time'] ?? null;
-        $slotDuration = filter_var($data['slot_duration'] ?? 15, FILTER_VALIDATE_INT);
-
-        if (!$dayOfWeek || !$startTime || !$endTime || !$slotDuration || $dayOfWeek < 1 || $dayOfWeek > 5 || $slotDuration < 5) {
-            throw new Exception("Ungültige Eingabedaten.", 400);
+        $formatted = $appointment;
+        try {
+            if (isset($appointment['start_time'])) {
+                $startTime = new DateTime($appointment['start_time'], new DateTimeZone('UTC'));
+                $startTime->setTimezone($this->timezone);
+                $formatted['formatted_date'] = $this->formatDate($startTime);
+                $formatted['formatted_start_time'] = $startTime->format('H:i');
+                $formatted['relative_time'] = $this->getRelativeTime($startTime);
+                if (isset($appointment['end_time'])) {
+                    $endTime = new DateTime($appointment['end_time'], new DateTimeZone('UTC'));
+                    $endTime->setTimezone($this->timezone);
+                    $formatted['formatted_end_time'] = $endTime->format('H:i');
+                    $formatted['formatted_duration'] = $this->formatDuration($startTime, $endTime);
+                } else {
+                    $formatted['formatted_end_time'] = '';
+                    $formatted['formatted_duration'] = '';
+                }
+            } else {
+                $formatted['formatted_date'] = 'Unbekannt';
+                $formatted['formatted_start_time'] = '';
+                $formatted['relative_time'] = 'Unbekannt';
+                $formatted['formatted_end_time'] = '';
+                $formatted['formatted_duration'] = '';
+            }
+        } catch (Exception $e) {
+            $appointmentId = $appointment['appointment_id'] ?? 'unbekannt';
+            error_log("Fehler bei der Formatierung des Termins (ID: {$appointmentId}): " . $e->getMessage());
+            $formatted['formatted_date'] = 'Fehler';
+            $formatted['formatted_start_time'] = 'Fehler';
+            $formatted['relative_time'] = 'Fehler';
+            $formatted['formatted_end_time'] = 'Fehler';
+            $formatted['formatted_duration'] = 'Fehler';
         }
-
-        if ($startTime >= $endTime) {
-            throw new Exception("Startzeit muss vor der Endzeit liegen.", 400);
+        if (isset($formatted['title'])) {
+            $formatted['title'] = htmlspecialchars($formatted['title'], ENT_QUOTES, 'UTF-8');
         }
-
-        return $this->appointmentRepo->createAvailability(
-            $teacherUserId,
-            $dayOfWeek,
-            $startTime,
-            $endTime,
-            $slotDuration
-        );
+        if (isset($formatted['description'])) {
+            $formatted['description'] = htmlspecialchars($formatted['description'], ENT_QUOTES, 'UTF-8');
+        }
+        return $formatted;
     }
-
-    /**
-     * Löscht ein Sprechstundenfenster eines Lehrers.
-     * (Unverändert)
-     */
-    public function deleteAvailability(int $teacherUserId, int $availabilityId): bool
+    private function formatDate(DateTime $date): string
     {
-        // ... (Logik unverändert) ...
-     */
-    public function deleteAvailability(int $teacherUserId, int $availabilityId): bool
-    {
-        if (!$availabilityId) {
-            throw new Exception("Keine ID angegeben.", 400);
+        $now = new DateTime('now', $this->timezone);
+        $dateOnly = (new DateTime($date->format('Y-m-d'), $this->timezone));
+        $nowOnly = (new DateTime($now->format('Y-m-d'), $this->timezone));
+        $diff = $nowOnly->diff($dateOnly);
+        $daysDiff = (int)$diff->days;
+        $isFuture = $diff->invert === 0;
+        if ($daysDiff === 0) {
+            return 'Heute';
+        } elseif ($daysDiff === 1 && $isFuture) {
+            return 'Morgen';
+        } elseif ($daysDiff === 1 && !$isFuture) {
+             return 'Gestern'; 
         }
-
-        // Repository wirft 404, wenn nicht gefunden oder keine Berechtigung
-        $success = $this->appointmentRepo->deleteAvailability($availabilityId, $teacherUserId);
-
-        if (!$success) {
-             throw new Exception("Sprechzeit nicht gefunden oder keine Berechtigung.", 404);
-        }
-        
-        return true;
+        $tage = ['So', 'Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa'];
+        $wochentag = $tage[$date->format('w')];
+        $monate = [
+            'Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun',
+            'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'
+        ];
+        $monatName = $monate[$date->format('n') - 1];
+        return $wochentag . ', ' . $date->format('d.') . ' ' . $monatName;
     }
-
-
-    // --- Logik aus DashboardController ---
-
-    /**
-     * Holt alle verfügbaren (noch nicht gebuchten) Slots für einen Lehrer an einem Datum.
-     * (Unverändert)
-     */
-    public function getAvailableSlots(int $teacherStammdatenId, string $date): array
+    private function getRelativeTime(DateTime $date): string
     {
-        // ... (Logik unverändert) ...
-     */
-    public function getAvailableSlots(int $teacherStammdatenId, string $date): array
-    {
-        if (!$teacherStammdatenId || !$date || DateTime::createFromFormat('Y-m-d', $date) === false) {
-            throw new Exception("Ungültige Lehrer-ID oder Datum.", 400);
+        $now = new DateTime('now', $this->timezone);
+        $interval = $now->diff($date);
+        $isPast = $interval->invert; 
+        $prefix = $isPast ? 'vor' : 'in';
+        $suffix = ''; 
+        if ($interval->y) {
+            return $prefix . ' ' . $interval->y . ' ' . ($interval->y > 1 ? 'Jahren' : 'Jahr') . $suffix;
         }
-        
-        // 1. Finde die user_id des Lehrers anhand der Stammdaten-ID
-        $teacherUser = $this->userRepo->findUserByTeacherId($teacherStammdatenId);
-        if (!$teacherUser) {
-            throw new Exception("Lehrerprofil (Benutzer) nicht gefunden.", 404);
+        if ($interval->m) {
+            return $prefix . ' ' . $interval->m . ' ' . ($interval->m > 1 ? 'Monaten' : 'Monat') . $suffix;
         }
-        $teacherUserId = $teacherUser['user_id'];
-        
-        // 2. Prüfe Datum (Vergangenheit)
-        $today = (new DateTime('now', $this->timezone))->format('Y-m-d');
-        $slots = [];
-        if ($date < $today) {
-             $slots = $this->appointmentRepo->getAvailableSlots($teacherUserId, $date);
-             // Erlaube Anzeige, wenn Slots vorhanden, aber werfe Fehler, wenn keine Slots UND in Vergangenheit
-             if (empty($slots)) {
-                  throw new Exception("Termine können nicht in der Vergangenheit gebucht werden.", 400);
-             }
-        } else {
-             $slots = $this->appointmentRepo->getAvailableSlots($teacherUserId, $date);
+        if ($interval->d) {
+            return $prefix . ' ' . $interval->d . ' ' . ($interval->d > 1 ? 'Tagen' : 'Tag') . $suffix;
         }
-        
-        return $slots;
+        if ($interval->h) {
+            return $prefix . ' ' . $interval->h . ' ' . ($interval->h > 1 ? 'Stunden' : 'Stunde') . $suffix;
+        }
+        if ($interval->i) {
+            return $prefix . ' ' . $interval->i . ' ' . ($interval->i > 1 ? 'Minuten' : 'Minute') . $suffix;
+        }
+        return $isPast ? 'gerade eben' : 'jetzt gleich';
     }
-
-    /**
-     * Bucht einen Termin für einen Schüler.
-     * (Unverändert)
-     */
-    public function bookAppointment(int $studentUserId, array $data): int
+    private function formatDuration(DateTime $start, DateTime $end): string
     {
-        // ... (Logik unverändert) ...
-     */
-    public function bookAppointment(int $studentUserId, array $data): int
-    {
-        $teacherStammdatenId = filter_var($data['teacher_id'] ?? null, FILTER_VALIDATE_INT);
-        $date = $data['date'] ?? null;
-        $time = $data['time'] ?? null;
-        $duration = filter_var($data['duration'] ?? null, FILTER_VALIDATE_INT);
-        $notes = isset($data['notes']) ? trim($data['notes']) : null;
-
-        if (!$teacherStammdatenId || !$date || !$time || !$duration) {
-            throw new Exception("Fehlende Daten für die Buchung.", 400);
+        $duration = $start->diff($end);
+        $formatted = '';
+        if ($duration->h > 0) {
+            $formatted .= $duration->h . 'h';
         }
-        
-        // 1. Finde die user_id des Lehrers
-        $teacherUser = $this->userRepo->findUserByTeacherId($teacherStammdatenId);
-        if (!$teacherUser) {
-            throw new Exception("Lehrerprofil (Benutzer) nicht gefunden.", 404);
+        if ($duration->i > 0) {
+            if ($formatted !== '') {
+                $formatted .= ' '; 
+            }
+            $formatted .= $duration->i . 'm';
         }
-        $teacherUserId = $teacherUser['user_id'];
-        
-        // 2. Prüfe Datum (Vergangenheit)
-        $today = (new DateTime('now', $this->timezone))->format('Y-m-d');
-        if ($date < $today) {
-             throw new Exception("Termine können nicht in der Vergangenheit gebucht werden.", 400);
+        if ($formatted === '') {
+            if ($duration->s > 0 && $duration->h == 0 && $duration->i == 0) {
+                 return $duration->s . 's'; 
+            }
+            return '0m'; 
         }
-
-        // 3. Buchung im Repository (wirft 409 bei Konflikt)
-        return $this->appointmentRepo->bookAppointment(
-            $studentUserId,
-            $teacherUserId,
-            $date,
-            $time,
-            $duration,
-            $notes
-        );
-    }
-
-    /**
-     * Storniert einen Termin (durch Schüler oder Lehrer).
-     * (Unverändert)
-     */
-    public function cancelAppointment(int $appointmentId, int $userId, string $role): bool
-    {
-        // ... (Logik unverändert) ...
-
-    public function cancelAppointment(int $appointmentId, int $userId, string $role): bool
-    {
-        if (!$appointmentId) {
-            throw new Exception("Keine Termin-ID angegeben.", 400);
-        }
-
-        // Repository wirft 403/404 bei Fehlern
-        $success = $this->appointmentRepo->cancelAppointment($appointmentId, $userId, $role);
-        
-        if (!$success) {
-            // Sollte nicht passieren, wenn Repo Exceptions wirft, aber zur Sicherheit
-            throw new Exception("Termin konnte nicht storniert werden oder Berechtigung fehlt.", 500);
-        }
-        
-        return true;
-    }
-
-    // --- NEUE ÖFFENTLICHE METHODEN (Wrapper für das Repository) ---
-
-    /**
-     * Holt alle gebuchten Termine eines Schülers in einem Datumsbereich.
-     * (Wrapper für DashboardController)
-     *
-     * @param int $studentUserId
-     * @param string $startDate (Y-m-d)
-     * @param string $endDate (Y-m-d)
-     * @return array
-     */
-    public function getAppointmentsForStudent(int $studentUserId, string $startDate, string $endDate): array
-    {
-        return $this->appointmentRepo->getAppointmentsForStudent($studentUserId, $startDate, $endDate);
-    }
-
-    /**
-     * Holt alle gebuchten Termine eines Lehrers in einem Datumsbereich.
-     * (Wrapper für DashboardController)
-     *
-     * @param int $teacherUserId
-     * @param string $startDate (Y-m-d)
-     * @param string $endDate (Y-m-d)
-     * @return array
-     */
-    public function getAppointmentsForTeacher(int $teacherUserId, string $startDate, string $endDate): array
-    {
-        return $this->appointmentRepo->getAppointmentsForTeacher($teacherUserId, $startDate, $endDate);
+        return $formatted;
     }
 }

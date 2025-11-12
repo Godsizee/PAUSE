@@ -1,0 +1,120 @@
+.site-footer {
+    background-color: #1a1a1a; 
+    color: #a0a0a0; 
+    padding: 30px 0;
+    margin-top: auto; 
+    font-size: 0.9rem;
+    line-height: 1.6;
+}
+.dark-mode .site-footer {
+     background-color: #080808; 
+     color: #888;
+}
+.footer-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 20px;
+    max-width: 800px; 
+    margin: 0 auto;
+    padding: 0 20px;
+    text-align: center;
+}
+.copyright {
+    opacity: 0.8;
+}
+.imprint {
+    position: relative; 
+}
+.imprint-toggle {
+    background: none;
+    border: none;
+    color: var(--color-primary); 
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 0.9rem;
+    padding: 5px;
+    transition: color 0.2s ease;
+}
+.imprint-toggle:hover {
+    color: var(--color-secondary); 
+    text-decoration: none;
+}
+.dark-mode .imprint-toggle {
+     color: var(--color-primary); 
+}
+.dark-mode .imprint-toggle:hover {
+     color: var(--color-secondary);
+}
+.imprint-details {
+    display: none; 
+    position: fixed; 
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%) translateY(100%); 
+    width: 90%;
+    max-width: 600px;
+    max-height: 70vh; 
+    overflow-y: auto;
+    background-color: var(--color-surface);
+    color: var(--color-text);
+    padding: 30px;
+    border-radius: 12px 12px 0 0; 
+    box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2);
+    z-index: 1050; 
+    text-align: left;
+    transition: transform 0.4s cubic-bezier(0.165, 0.84, 0.44, 1); 
+}
+.imprint-details.visible {
+    transform: translateX(-50%) translateY(0); 
+    display: block;
+}
+.dark-mode .imprint-details {
+     background-color: #1e1e1e; 
+     color: var(--color-text);
+     box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.5);
+}
+.imprint-details p {
+    margin-bottom: 1rem;
+}
+.imprint-details strong {
+    color: var(--color-primary);
+}
+.dark-mode .imprint-details strong {
+    color: var(--color-primary);
+}
+.imprint-details a {
+    color: var(--color-secondary);
+    text-decoration: none;
+}
+.imprint-details a:hover {
+    text-decoration: underline;
+}
+.imprint-close {
+    position: absolute;
+    top: 10px;
+    right: 15px;
+    background: none;
+    border: none;
+    font-size: 1.8rem;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    padding: 5px;
+    line-height: 1;
+}
+.imprint-close:hover {
+    color: var(--color-danger);
+}
+@media (min-width: 769px) {
+    .footer-content {
+        flex-direction: row;
+        justify-content: space-between;
+        text-align: left;
+    }
+     .copyright {
+         order: 1; 
+     }
+     .imprint {
+         order: 2;
+     }
+}

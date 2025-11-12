@@ -1,20 +1,14 @@
 <?php
-// app/Repositories/StammdatenRepository.php
 namespace App\Repositories;
-
 use PDO;
-use Exception; // Hinzugefügt für Zähl-Methoden
-
+use Exception; 
 class StammdatenRepository
 {
     private PDO $pdo;
-
     public function __construct(PDO $pdo)
     {
         $this->pdo = $pdo;
     }
-
-    // --- Subject Methods ---
     public function getSubjects(): array {
         $stmt = $this->pdo->prepare("SELECT * FROM subjects ORDER BY subject_name ASC");
         $stmt->execute();
@@ -36,7 +30,6 @@ class StammdatenRepository
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([':id' => $id]);
     }
-    /** NEU: Zählt die Anzahl der Fächer */
     public function countSubjects(): int {
         try {
             $stmt = $this->pdo->query("SELECT COUNT(*) FROM subjects");
@@ -46,8 +39,6 @@ class StammdatenRepository
             return 0;
         }
     }
-
-    // --- Rooms Methods ---
     public function getRooms(): array {
         $stmt = $this->pdo->prepare("SELECT * FROM rooms ORDER BY room_name ASC");
         $stmt->execute();
@@ -69,7 +60,6 @@ class StammdatenRepository
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([':id' => $id]);
     }
-    /** NEU: Zählt die Anzahl der Räume */
     public function countRooms(): int {
         try {
             $stmt = $this->pdo->query("SELECT COUNT(*) FROM rooms");
@@ -79,8 +69,6 @@ class StammdatenRepository
             return 0;
         }
     }
-
-    // --- Teachers Methods ---
     public function getTeachers(): array {
         $stmt = $this->pdo->prepare("SELECT * FROM teachers ORDER BY last_name, first_name ASC");
         $stmt->execute();
@@ -103,7 +91,6 @@ class StammdatenRepository
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([':id' => $id]);
     }
-    /** NEU: Zählt die Anzahl der Lehrer */
     public function countTeachers(): int {
         try {
             $stmt = $this->pdo->query("SELECT COUNT(*) FROM teachers");
@@ -113,8 +100,6 @@ class StammdatenRepository
             return 0;
         }
     }
-
-    // --- Classes Methods (ANGEPASST) ---
     public function getClasses(): array {
         $sql = "SELECT c.class_id, c.class_name, c.class_teacher_id, CONCAT_WS(' ', t.first_name, t.last_name) as teacher_name
                 FROM classes c
@@ -124,33 +109,26 @@ class StammdatenRepository
         $stmt->execute();
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
-
     public function createClass(int $id, string $name, ?int $teacherId): bool {
-        // Prüfen, ob die ID bereits existiert
         $stmtCheck = $this->pdo->prepare("SELECT COUNT(*) FROM classes WHERE class_id = :id");
         $stmtCheck->execute([':id' => $id]);
         if ($stmtCheck->fetchColumn() > 0) {
             throw new \Exception("Die Klassen-ID '{$id}' ist bereits vergeben.");
         }
-
         $sql = "INSERT INTO classes (class_id, class_name, class_teacher_id) VALUES (:id, :name, :teacher_id)";
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([':id' => $id, ':name' => $name, ':teacher_id' => $teacherId]);
     }
-
     public function updateClass(int $id, string $name, ?int $teacherId): bool {
-        // Die ID (Primärschlüssel) selbst wird hier nicht geändert.
         $sql = "UPDATE classes SET class_name = :name, class_teacher_id = :teacher_id WHERE class_id = :id";
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([':id' => $id, ':name' => $name, ':teacher_id' => $teacherId]);
     }
-
     public function deleteClass(int $id): bool {
         $sql = "DELETE FROM classes WHERE class_id = :id";
         $stmt = $this->pdo->prepare($sql);
         return $stmt->execute([':id' => $id]);
     }
-    /** NEU: Zählt die Anzahl der Klassen */
     public function countClasses(): int {
         try {
             $stmt = $this->pdo->query("SELECT COUNT(*) FROM classes");
@@ -161,4 +139,3 @@ class StammdatenRepository
         }
     }
 }
-

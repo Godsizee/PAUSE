@@ -1,5 +1,4 @@
 <?php
-// pages/errors/404.php
 global $config;
 ?>
 <div class="container text-center">
